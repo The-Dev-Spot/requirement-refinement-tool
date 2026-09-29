@@ -19,7 +19,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python }}
-      - run: python -m pip install --require-hashes --only-binary=:all: -r requirements.lock
+      - run: >-
+          python -m pip install --require-hashes --only-binary=:all: -r requirements.lock
       - name: Require official parser (no silent skip)
         run: python -c "from gherkin import Parser, Compiler; assert Parser and Compiler"
       - run: python -m clarity validate-config
