@@ -1,0 +1,71 @@
+{
+  "version": 2,
+  "implemented_workflow_engine": false,
+  "entrypoints": {
+    "review": "story-orchestrator",
+    "intake": "story-intake",
+    "breakdown": "story-creator"
+  },
+  "stage_order": [
+    "investigate",
+    "evaluate",
+    "rewrite_if_needed",
+    "quality_gate",
+    "po_analysis_if_needed",
+    "quality_gate_if_changed",
+    "awaiting_approval"
+  ],
+  "waiting_states": [
+    "awaiting_input",
+    "awaiting_approval",
+    "awaiting_po"
+  ],
+  "terminal_states": [
+    "done",
+    "rejected",
+    "failed"
+  ],
+  "quarantine_state": "quarantined",
+  "run_identity": "stable run_id; external source_id is metadata",
+  "artifact_policy": {
+    "root": ".clarity/runs/{run_id}/{revision}/",
+    "immutable": [
+      "story-input",
+      "investigation",
+      "rewrite",
+      "eval-report",
+      "evaluation.json",
+      "quality-gates",
+      "po-analysis",
+      "po-challenge",
+      "po-responses",
+      "publication-plan"
+    ],
+    "append_only": [
+      "handoff",
+      "decision-log"
+    ],
+    "derived_views": [
+      "run-summary",
+      "run-context"
+    ]
+  },
+  "approval": {
+    "required": true,
+    "scope": [
+      "run_id",
+      "revision",
+      "target",
+      "payload",
+      "actions",
+      "source_revision",
+      "report_digest"
+    ],
+    "live_publisher_implemented": false
+  },
+  "learning_promotion": "explicit human-reviewed versioned change only",
+  "retention": {
+    "automatic_deletion": false,
+    "remote_hash_verification_implemented": false
+  }
+}
