@@ -1,88 +1,73 @@
-# Standalone architecture — v0.2
+# Standalone architecture
 
-Clarity is independent of any development-agent pipeline. The product boundary
-is requirement intake/refinement, evidence-backed review, operator decisions,
-and an approved local artifact. No downstream integration is included.
+Clarity's fixed output is an evidence-backed requirement with canonical Gherkin
+acceptance criteria. Input expertise changes the assistance, not the quality bar.
 
-## Controller and trust boundary
+## Product path (v0.3)
 
-`clarity.runtime.Workflow` owns durable transitions through SQLite. Public methods
-authenticate a role-scoped capability inside the same transaction as the requested
-operation. The CLI is an operator-facing wrapper over those methods, not a server.
-Credential provisioning belongs to the OS owner. The database stores only hashes
-of random capability keys; actual secrets are written to selected private files.
+`clarity.refine.Controller` owns raw briefs, selected evidence, source applicability,
+questions, confirmed answers, immutable drafts, independent reviews, exact approvals
+and sealed developer handoffs. `contracts.py` separates incomplete input from the
+complete output. `checks.py` validates source references, quotations, trusted policy,
+Gherkin syntax/compiler results, traceability and coverage. Semantic truth is still
+assessed independently; no heuristic claims to prove it.
 
-The author owns its run revisions. A separate fixed-role reviewer submits
-semantic assessments bound to the current snapshot digest. The application runs
-machine checks independently. Only an operator can answer questions, release
-quarantine, extend a rewrite cycle, reject, approve or seal an export.
+The controller adds `refine_meta`, `refine_runs`, `refine_records`, `refine_exports`
+to the existing private SQLite workspace through an explicit versioned bootstrap.
+It preserves the base schema and existing records. New runs are not visible to
+the legacy snapshot API, so a legacy approval cannot publish a new draft. Shared
+capabilities retain fixed author/reviewer/operator roles. Authors can access only
+their own briefs; reviewers/operators span this single trusted workspace.
 
-State and capability files must be outside untrusted agent access. An arbitrary
-process running as the controller's OS owner can defeat these checks; no claim of
-filesystem sandboxing or enterprise identity verification is made. There is no
-network API or multi-tenant authorization model in this release.
+Records are immutable and hash-chained; optimistic versions and immediate SQLite
+transactions prevent stale writes. External inference takes place outside database
+transactions. A model attempt is reserved before calling and never retried silently.
+Completed outputs are rejected if decisions/source versions changed while waiting.
 
-## Storage and consistency
+## Reasoning and models
 
-SQLite transactions use explicit BEGIN IMMEDIATE, foreign keys and FULL
-synchronous durability. Revision, review, event and export records have no-update/
-no-delete triggers. Operations require optimistic run versions. Transactions
-roll back on failure; a stale caller must refresh, not silently overwrite state.
+The optional `worker.py` runner makes two explicit calls: evidence-based interviewing
+or drafting, then fresh independent review. It does not dispatch all ten role profiles.
+Drafting returns either bounded questions or a strict draft; review returns complete
+statement/scenario findings and semantic checks. Outputs cannot grant authority,
+change policy, choose tools, approve or publish. An operator chooses the model(s)
+and authorizes selected data for that deployment. A fresh reviewer context receives
+neither the writer's self-score nor a previous review score.
 
-The controller states are awaiting_review, awaiting_revision, awaiting_po,
-awaiting_approval, approved, quarantined, exported and rejected. Waiting is not
-completion. Source and run identity are stable; new evidence produces revisions.
-A three-rewrite cycle limit requires a recorded operator extension when exhausted.
+The implemented transport targets Ollama on 127.0.0.1 only, without proxies,
+redirects or tool calls. Model names are explicit. Loopback does not guarantee
+local inference: verify cloud-backed-model settings and data handling. There are
+size/call/output budgets and socket timeouts, not an isolated inference sandbox.
+A crash leaves a visible reserved attempt; a human chooses whether to retry.
 
-Every event carries the previous event hash. Artifact hashes and chain validation
-detect accidental corruption, not malicious rewriting by the database owner.
-Backups use a consistent transaction and exclude authentication secrets/hashes.
-Restore verifies the retained digest and artifacts, uses a fresh destination,
-disables old credentials and revokes unused approvals. There is no automatic
-pruning, backup encryption or external backup service.
+## Workbench
 
-## Readiness and approval
+`python -m clarity.refine --state ... serve` runs a local server-rendered UI.
+It supports plain-language input, selected-source capture, targeted questions,
+role-specific drafting/review/approval actions, evidence, diffs and coverage.
+No JavaScript, remote assets, credential-bearing model requests or administrative
+provisioning endpoint is supplied. Host/origin checks, CSRF tokens, strict forms,
+HttpOnly SameSite cookies, escaped content and no-store responses protect this
+loopback use case. Do not proxy it onto the internet.
 
-`models.py` owns strict versioned snapshot and assessment shapes. `lint.py` runs
-L1-L8 syntax, lexical, tag, risk-reference, provenance-format, question-marker and
-selected-catalog checks. Behavioral syntax uses the official parser/compiler;
-checklists require an explicit verification method. These checks do not prove
-semantic correctness or the authenticity of evidence. Independent D1-D10 review
-remains essential. Suspicious-instruction heuristics can quarantine known patterns
-but are not a universal prompt-injection detector.
+## Handoff and recovery
 
-Exact plans bind the snapshot, review, source revision and current policy sources.
-The policy fingerprint includes core runtime/check modules, rubric and operating
-contracts; a changed fingerprint requires re-review. Approvals expire within
-900 seconds and are bound to their issuing credential. Only a local seal action
-is allowlisted. Sealing consumes approval and stores the full export in one
-transaction. Concurrent/repeated requests retrieve the same export. Saving that
-export to a file is separate, retryable and refuses overwrite.
+The operator approves exact generated file hashes, source/context/review/engine
+versions and an explicit export profile. The Gherkin file is copied byte-for-byte
+from the approved draft. SQLite atomically records approval consumption and sealed
+files; repeated sealing retrieves the existing result. File retrieval is separate
+and retryable. No remote test creation or execution is implied.
 
-## Imports, hosts and interface
+The backup API supports the old v1 envelope and a v2 envelope including refinement
+records. Restore uses a new private destination, validates hashes/chains and disables
+all old keys. Pending approvals require a new independent review/approval. Previously
+sealed exports remain historical evidence. Encryption and automatic pruning are absent.
 
-The Markdown importer uses explicit user-selected files and records source hashes.
-The Linear reader accepts an explicitly supplied read-only API key and team scope,
-uses fixed read-only GraphQL queries, checks optional project scope, paginates
-comments, caps requests/bytes and refuses redirects or partial/error responses.
-Live Linear validation is still required. It does not fetch arbitrary linked
-pages, attachments or every possible issue field; it cannot guarantee an atomic
-snapshot of concurrently edited comments.
+## Compatibility and boundaries
 
-The workbench is escaped, static HTML. It displays source diffs, questions,
-evidence, reviews, exact plan and events. No JavaScript, remote assets, forms or
-write actions are embedded. Approval stays in the authenticated CLI.
-
-Ten agent profiles retain the reasoning process. The controller does not invoke
-models, authenticate that two model deployments are genuinely independent, or
-prove that each reasoning sub-stage occurred. Native host smoke tests and a
-human-labelled model-quality benchmark remain separate work.
-
-## Primary implementation references
-
-- SQLite transaction semantics: https://www.sqlite.org/lang_transaction.html
-- Official Gherkin Python parser/compiler: https://github.com/cucumber/gherkin
-- Pinned parser distribution: https://pypi.org/project/gherkin-official/
-- Linear authentication and errors: https://linear.app/developers/graphql
-- Linear pagination: https://linear.app/developers/pagination
-- Linear rate limits: https://linear.app/developers/rate-limiting
+The v0.2 controller, read-only Linear adapter and old helpers remain available.
+Their checklist artifacts are legacy exports, not v0.3 quality-approved handoffs.
+This is a standalone application, not a development-pipeline front end. No
+enterprise identity provider, public API, multi-tenant access control, guaranteed
+prompt-injection detection, source-system authority verification or live Xray
+publisher is implemented. Use human-reviewed evaluations before quality claims.

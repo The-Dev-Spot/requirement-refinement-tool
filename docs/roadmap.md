@@ -1,51 +1,56 @@
-# Standalone Clarity roadmap
+# Clarity roadmap — quality first
 
-## Product decision
+## North star
 
-Clarity is a standalone product. No development-pipeline connection, automatic
-story dispatch or integration-dependent architecture is part of this phase.
-The current deliverable is a local-first refinement and review controller.
+Deliver excellent, developer-ready requirements with precise Gherkin acceptance
+criteria regardless of whether the request starts with a senior analyst, junior
+analyst or someone with no analysis experience. Test management reuses those exact
+approved scenarios. Clarity is standalone; no development-pipeline integration.
 
-## Delivered in v0.2
+## Delivered in this change
 
-Durable SQLite runs and immutable revisions; authenticated local role capabilities;
-independent digest-bound reviews; application-computed L1-L8 rules; stable owner
-questions; mandatory post-answer revision/review; exact expiring approvals;
-atomic idempotent local artifact sealing; explicit backup/restore; corruption
-checks; sticky quarantine; a three-rewrite budget; Markdown import; bounded
-read-only Linear import; a static review workbench; adversarial/concurrency
-regressions and synthetic rule benchmarks. See the hardening record for limits.
+Raw-brief intake; traceable statements; exact source quotes and applicability
+attestations; trusted policy; rule-to-scenario coverage; independent statement and
+scenario review; governed false-positive handling; bounded opt-in model stages;
+interactive loopback UI; immutable Gherkin handoffs; same-need evaluation harness;
+versioned backup/restore. The ten specialist definitions are retained. See the
+quality-handoff record for what was tested and what is not claimed.
 
-## Next standalone product decisions — not implemented
+## Next acceptance work
 
-**Operator experience and host integration.** Validate the preserved ten-role
-workflow with the actual editor/model host. Decide whether to add a small local
-server and real interactive workbench. Acceptance: server-side authentication,
-per-action authorization, CSRF/origin controls, separate controller identity,
-usable approval preview, and no agent access to operator credentials. The current
-static HTML view deliberately cannot approve anything.
+**Dogfood the complete flow.** Choose an authorized local model deployment and run
+real, anonymized needs through ordinary-language intake, source confirmation,
+questions, review and approval. Record failed steps and human corrections. Do not
+replace independent review with a writer's self-score to make a demonstration pass.
 
-**Semantic quality benchmark.** Build a human-labelled, versioned corpus of
-behavioral, infrastructure, research and domain-regulated requirements. Measure
-unsupported claims, missed blockers, useful questions, owner corrections, time
-and cost. Compare independent evaluators rather than only model self-scores.
-The shipped 13-case rule suite is synthetic regression coverage, not this study.
+**Human-labelled quality benchmark.** Expand beyond the three synthetic starting
+points to varied needs, ambiguity, conflicting evidence, security and nonfunctional
+requirements. Blind developer/tester reviewers assess final outputs; use multiple
+trials and per-group results. Measure unsupported statements, missed decisions,
+false blocks, scenario coverage and correction effort. Equal quality is the target,
+not a conclusion established by unit tests.
 
-**Live read integration validation.** Test the Linear reader using a separately
-provided read-only key and chosen team/project. Validate real schema, pagination,
-permission errors, source freshness, comments edited during retrieval and resource
-limits. Add other providers only when required for the standalone product.
+**Xray edition pilot.** Select Cloud or Server/Data Center and a test project.
+Validate .feature imports, outlines, backgrounds, tags, traceability and repeated
+import behavior. Preserve exact Gherkin bytes. Project/requirement/Test-key mapping
+requires explicit configuration; never infer it. A feature file is not executable
+automation until its step definitions and environment exist.
 
-**Third-party publication.** Keep it disabled until explicitly requested. A future
-writer requires authenticated exact-action approval, fresh remote revision checks,
-field allowlists, persistent operation IDs, timeout reconciliation and real
-integration tests. Local exactly-once sealing does not promise remote exactly-once
-creation. No remote API writer has been added merely to check a roadmap box.
+**Broader source handling.** Add permission-aware read adapters and immutable
+source revisions with original/effective/retrieval dates. Preserve authority and
+scope. Changes must identify affected claims rather than silently rewriting an
+approved baseline. Current text captures attest applicability but do not validate
+remote source identity or authorship automatically.
 
-**Packaging and operation.** Validate secure Windows ACL support before enabling
-it, package policy resources for distribution, add an independent secret scanner,
-measure larger-workspace behavior, and decide on encrypted backups and retention.
-No automatic deletion until recovery and operator selection are demonstrably safe.
+**Usability and supported deployment.** Test the workbench with novice users as
+well as experienced analysts; remove unnecessary JSON handling. Current model
+contracts may need constrained-output improvements based on actual failures.
+Public hosting, SSO, per-project reviewer permissions, Windows ACL support,
+packaging and encrypted backups require explicit engineering and security reviews.
+Do not expose the loopback server as a production multi-tenant service.
 
-These are subsequent standalone improvements, not authorization to expand scope
-or integrate with another product now.
+**Measured orchestration improvements.** Compare the two-stage runner with selected
+specialist dispatch, asking whether the extra stage improves the final requirement.
+Add a stage only when quality results justify its time/cost. No automatic external
+publication, learning promotion, custom-model training or infrastructure expansion
+without a demonstrated need and separate approval.

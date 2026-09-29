@@ -31,7 +31,10 @@ class PackagingTests(unittest.TestCase):
         contract = load_json(ROOT / ".github/agents/runtime-doc-contract.json")
         self.assertTrue(contract["implemented_workflow_engine"])
         self.assertFalse(contract["development_pipeline_integration"])
-        self.assertFalse(contract["model_orchestration_implemented"])
+        self.assertTrue(contract["model_orchestration_implemented"])
+        self.assertFalse(contract["all_ten_roles_automatically_dispatched"])
+        self.assertEqual(contract["canonical_acceptance_format"], "gherkin")
+        self.assertFalse(contract["quality_threshold_depends_on_user_expertise"])
         self.assertFalse(contract["approval"]["live_publisher_implemented"])
 
 
