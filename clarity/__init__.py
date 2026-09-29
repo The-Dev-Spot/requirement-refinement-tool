@@ -1,3 +1,3 @@
-"""Clarity's offline validation helpers; not an agent runner or live publisher."""
+"""Standalone requirement refinement: durable local workflows and offline checks."""
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"

@@ -31,8 +31,8 @@ quality gate → PO analyst/challenger when needed → re-gate. Record material
 decisions and the same evidence set as existing-story review. The stakeholder
 may answer remaining questions, but changed drafts still require a fresh gate.
 
-Stage the exact proposed new-issue payload for explicit approval. This baseline
-cannot create issues. Keep NOT READY drafts local. Denial creates nothing. A
+Stage the exact proposed new-issue payload for explicit approval. This standalone release
+cannot create remote issues. Keep NOT READY drafts local. Denial creates nothing. A
 future creation response adds source_id metadata; it never rewrites run identity.
 
 

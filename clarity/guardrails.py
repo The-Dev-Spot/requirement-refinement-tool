@@ -38,7 +38,7 @@ def identifier(value: str) -> str:
 def canonical(value: Any) -> str:
     try:
         return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False)
-    except (TypeError, ValueError) as exc:
+    except (TypeError, ValueError, RecursionError) as exc:
         raise ValidationError("Value is not canonical JSON") from exc
 
 
@@ -59,8 +59,10 @@ def load_json(path: Path) -> Any:
     def reject_constant(value: str) -> None:
         raise ValidationError("Non-finite JSON number")
     try:
+        if path.stat().st_size > 20_000_000:
+            raise ValidationError("JSON input exceeds size limit")
         return json.loads(path.read_text(encoding="utf-8"), object_pairs_hook=_unique, parse_constant=reject_constant)
-    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+    except (OSError, UnicodeError, json.JSONDecodeError, RecursionError) as exc:
         raise ValidationError("Cannot read valid UTF-8 JSON") from exc
 
 

@@ -1,55 +1,51 @@
-# Personal Clarity roadmap
+# Standalone Clarity roadmap
 
-## P0 — trusted runtime and publication boundary
+## Product decision
 
-Implement durable run/revision state, authenticated owner decisions and a
-separate scoped publisher. Approval must bind run, artifact revision, source
-revision, exact target, actions and payload hashes. Reject stale approvals; claim
-idempotency atomically; reconcile timeouts; prohibit hidden field/label writes.
-Acceptance: concurrent duplicate submissions, forged approvals, changed evidence,
-partial failure and unauthorized field writes fail safely in integration tests.
-Keep live writes disabled until this gate is met. No deployment is part of v0.1.
+Clarity is a standalone product. No development-pipeline connection, automatic
+story dispatch or integration-dependent architecture is part of this phase.
+The current deliverable is a local-first refinement and review controller.
 
-## P1 — executable quality and adversarial evaluation
+## Delivered in v0.2
 
-Implement a parser-backed Gherkin/checklist linter and the remaining L1-L8 rules.
-Separate grammar validation from stylistic narrative-order policy. Build a
-versioned synthetic gold set spanning behavioral, business, research, API and
-regulated scenarios, contradictions, inaccessible sources and injected commands.
-Acceptance: deterministic rules have positive/negative fixtures; semantic
-judgments are compared with human labels; unsupported assertions and missing
-blockers are measured. No model evaluates only its own rewrite.
+Durable SQLite runs and immutable revisions; authenticated local role capabilities;
+independent digest-bound reviews; application-computed L1-L8 rules; stable owner
+questions; mandatory post-answer revision/review; exact expiring approvals;
+atomic idempotent local artifact sealing; explicit backup/restore; corruption
+checks; sticky quarantine; a three-rewrite budget; Markdown import; bounded
+read-only Linear import; a static review workbench; adversarial/concurrency
+regressions and synthetic rule benchmarks. See the hardening record for limits.
 
-## P1 — provider-neutral integrations and pipeline handoff
+## Next standalone product decisions — not implemented
 
-Define typed requirement, evidence, question, evaluation and publication schemas.
-Start with local Markdown import/export and a read-only Linear adapter; add Jira
-and GitHub by demand. Resolve permissions, pagination, custom fields, timeouts,
-rate limits and source revision identifiers explicitly.
-Acceptance: contract tests for each adapter; no provider constants in the rubric;
-versioned approved handoff includes source coverage, blockers, artifact digest
-and decision trail. No automatic downstream build of NOT READY requirements.
+**Operator experience and host integration.** Validate the preserved ten-role
+workflow with the actual editor/model host. Decide whether to add a small local
+server and real interactive workbench. Acceptance: server-side authentication,
+per-action authorization, CSRF/origin controls, separate controller identity,
+usable approval preview, and no agent access to operator credentials. The current
+static HTML view deliberately cannot approve anything.
 
-## P1 — durable evidence, resume and traceability
+**Semantic quality benchmark.** Build a human-labelled, versioned corpus of
+behavioral, infrastructure, research and domain-regulated requirements. Measure
+unsupported claims, missed blockers, useful questions, owner corrections, time
+and cost. Compare independent evaluators rather than only model self-scores.
+The shipped 13-case rule suite is synthetic regression coverage, not this study.
 
-Use immutable per-run revisions and stable question IDs. Source-to-AC coverage
-must survive proposal merges, owner replies and intake-to-created-issue mapping.
-Acceptance: interrupted runs resume without duplicate artifacts or writes;
-contradictory owner replies remain visible; hashes detect changed evidence;
-retention deletion stays disabled until backup and restore tests pass.
+**Live read integration validation.** Test the Linear reader using a separately
+provided read-only key and chosen team/project. Validate real schema, pagination,
+permission errors, source freshness, comments edited during retrieval and resource
+limits. Add other providers only when required for the standalone product.
 
-## P2 — focused user experience and measurable improvement
+**Third-party publication.** Keep it disabled until explicitly requested. A future
+writer requires authenticated exact-action approval, fresh remote revision checks,
+field allowlists, persistent operation IDs, timeout reconciliation and real
+integration tests. Local exactly-once sealing does not promise remote exactly-once
+creation. No remote API writer has been added merely to check a roadmap box.
 
-Build a lightweight local workbench before a multi-tenant service: intake,
-source panel, before/after diff, question queue, rubric rationale and exact
-publication preview. Show cost and elapsed time, with explicit waiting states.
-Acceptance: a new user can inspect why a requirement is blocked and approve only
-specific reviewed changes. Measure time to approved handoff, owner edit burden,
-unsupported-claim rate and missed blockers; track question quality, not just count.
+**Packaging and operation.** Validate secure Windows ACL support before enabling
+it, package policy resources for distribution, add an independent secret scanner,
+measure larger-workspace behavior, and decide on encrypted backups and retention.
+No automatic deletion until recovery and operator selection are demonstrably safe.
 
-## P2 — portability and maintainability
-
-Add host-specific smoke tests, native subagent/skill registrations where needed,
-versioned prompt bundles and dependency/security scanning. Separate maintainer
-coding mode from requirement-analysis mode. Keep model selection configurable;
-introduce more infrastructure only after measured benefit.
+These are subsequent standalone improvements, not authorization to expand scope
+or integrate with another product now.

@@ -1,30 +1,70 @@
-# Security boundary
+# Security boundary — standalone v0.2
 
-Clarity processes untrusted requirements, comments and knowledge. Keep analysis
-agents on read-only integrations; an agent's own agreement to obey a prompt is
-not a permission boundary. The shipped Python helpers make no network calls.
+## Protect the controller, not just prompts
 
-Do not commit credentials, local MCP settings, real issue exports, operational
-run histories, proprietary documents or private learning registers. Runtime
-artifacts are ignored under `.clarity/`; private knowledge is ignored under
-`knowledge/private/`. Configure only services and model providers you are
-permitted to use for the selected data.
+Keep the controller database, installed source and capability keys outside the
+agent workspace. The shipped agent profiles do not receive terminal, tracker-write,
+operator-key or provisioning permissions. A process with the controller's OS
+account can read its keys or rewrite its database/code; application role checks
+cannot sandbox that process. No protected network API or enterprise sign-in ships.
 
-The repository hygiene checker is intentionally small: it detects selected token
-patterns, private artifacts, emails and unreviewed URL hosts. It does not detect
-all secrets, all personal information, all obfuscations or every company name.
-Use an independent secret scanner and a human privacy review before sharing.
+Local capability keys are random 256-bit secrets stored only as hashes in SQLite.
+The API enforces author/reviewer/operator roles, stable actor roles and author
+ownership; identity means possession of an operator-provisioned capability, not
+proof of a person's legal identity or an enterprise account. Provision separate
+reviewer identities deliberately; aliases alone do not produce independent review.
+Provisioning is trusted OS-owner administration and must not be exposed to agents.
 
-`authorize_plan` is a local policy primitive, not an identity provider, durable
-approval ledger or atomic transaction. Approval identity, action allowlists,
-source revisions and consumed-approval records must come from a trusted
-application, never model-produced JSON. There is no live publisher in this version.
+Use owner-only POSIX state directories (0700), files (0600), no symlinked ancestors,
+and a trusted local filesystem. Windows is rejected until proper ACL handling
+exists. Keys never belong in source, prompt text, command arguments or ordinary
+logs. The CLI accepts private credential files and does not print their contents.
+Revocation invalidates access and the issuing key's unused approvals.
 
-Quarantine suspected prompt injection; never reinterpret retrieved instructions
-as approval. Do not persist secrets even as examples or error messages. If an
-actual credential is exposed, rotate it; deleting the visible file alone is not
-remediation. Do not import old Git objects into a sanitized repository.
+## Approval and data integrity
 
-Report issues privately to the repository owner using an existing authorized
-channel. Do not put credentials or sensitive payloads into a GitHub issue.
-Anonymization is not a determination of copyright or permission to redistribute.
+An independently reviewed READY artifact is not permission to publish. Operators
+approve exact displayed plans bound to current snapshots, source/review hashes and
+policy fingerprints. Approvals expire within 900 seconds; changed revisions,
+answers, reviews, policies or credential status invalidate them. Sealing and
+approval consumption are atomic and repeatable without duplicate exports.
+Only local artifact sealing exists. No remote tracker mutation is enabled.
+
+Append-only events and immutable revisions have integrity hashes and SQL guards.
+These detect accidental corruption; they are not tamper-proof against a privileged
+owner. Backups contain private evidence but no authentication hashes/secrets.
+Protect and encrypt backup files separately. Restore requires a new workspace,
+verifies its retained digest, disables old keys and revokes unused approvals.
+Automatic deletion and external retention jobs are not implemented.
+
+## Evidence and adversarial input
+
+Requirements, comments, source documents, model assessments and learned rules are
+untrusted data, not tool instructions. Known suspicious instruction patterns flag
+a run for sticky quarantine. A clean scan is not proof of safety. The operator
+must inspect a clean revision before release; fresh independent review follows.
+The detector is heuristic and can miss obfuscation or non-English attacks.
+
+Machine checks cover grammar and selected deterministic/lexical rules. They do
+not verify semantic truth, source authority, relevance or every possible vague
+requirement. Evidence references must resolve inside the submitted snapshot;
+authenticity still needs review. No real-world semantic-accuracy claim is made.
+
+The optional Linear importer uses one fixed HTTPS endpoint, read queries only,
+explicit team/project checks, bounded pagination, conservative error handling
+and no credential-bearing redirects. Use a team-restricted read-only key. The
+adapter has mocked contract tests, not a live integration certification.
+The offline workbench escapes data and forbids network/script/form activity;
+it is a static private snapshot, not a write-capable web application.
+
+## Source hygiene
+
+Do not commit private documents, real exports, runs, original archives, prior Git
+history, local MCP configuration, secrets or credentials. The small repository
+scanner is not a complete secret/anonymization tool. Perform human review and
+an independent scanner pass before broader distribution. Rotate an exposed key;
+deleting visible content does not remove prior exposure.
+
+Report security issues privately through an existing authorized owner channel.
+Never put secrets in public issues. Keep the repository private; anonymization
+does not establish ownership or redistribution rights.
