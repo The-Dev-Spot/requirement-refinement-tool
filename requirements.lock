@@ -1,4 +1,6 @@
-# Official parser pinned by version and published wheel hash.
-# No transitive dependencies. CI must not silently skip this installation.
+# Official parser and its type-hint dependency, pinned to published wheel hashes.
+# CI must not silently skip installation or bypass dependency hash verification.
 gherkin-official==42.0.1 \
     --hash=sha256:6bf291733d126712eb167f6f75be57931dd8b9c9eb606de28013f3669007ec06
+typing-extensions==4.16.0 \
+    --hash=sha256:481caa481374e813c1b176ada14e97f1f67a4539ce9cfeb3f350d78d6370c2e8
