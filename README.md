@@ -22,7 +22,8 @@ python -m clarity lint examples/checklist-requirement.json
 python -m clarity benchmark examples/rule-benchmark.json
 ```
 
-The only third-party runtime dependency is the pinned official Gherkin parser.
+The third-party runtime dependencies are the pinned official Gherkin parser
+and its typing-extensions dependency.
 Without it, behavioral syntax checks return NOT_RUN. The fixture benchmark tests
 13 synthetic rule cases, not model accuracy or real-world semantic correctness.
 
