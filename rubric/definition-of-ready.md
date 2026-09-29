@@ -72,3 +72,26 @@ or unconfirmed proposal produces WARN. Only a complete all-PASS report without
 questions, proposals or injection concerns becomes READY. D9 escalates for
 interfaces; D10 escalates for regulated work. READY never authorizes publication.
 See `clarity/guardrails.py` and `tests/test_guardrails.py` for executable rules.
+
+## v0.3 product handoff (takes precedence for new refinement runs)
+
+Gherkin is the canonical acceptance format for the product, including non-UI work.
+The checklist branch above remains only for legacy v0.2 snapshot compatibility;
+it cannot satisfy or bypass the new developer-handoff contract. See
+`docs/handoff-standard.md` for the authoritative new output standard.
+
+`clarity.refine.checks` supplies structural and provenance findings, and the trusted
+controller requires independent statement support, scenario fidelity and the ten
+named semantic checks: intent_preserved, cold_read, precise_rules, no_invention,
+appropriate_scope, test_coverage, observable_outcomes, applicability, dependencies,
+and nonfunctional_requirements. All require a substantive rationale. No user
+experience level changes the threshold. Relevant nonfunctional requirements and
+dependencies must be explicit; inapplicability must be justified, not silently assumed.
+
+Valid grammar is necessary, not sufficient. Each rule/constraint has explicit
+positive, negative, boundary and alternative coverage or a reviewed inapplicability
+reason. Source existence, actual support and authority are evaluated separately.
+Context-sensitive wording warnings can be resolved with exact recorded rationale;
+objective failures and missing owner decisions cannot. Suspicious-text signals
+require a separate operator adjudication bound to the exact draft and evidence.
+READY still does not authorize approval or export.

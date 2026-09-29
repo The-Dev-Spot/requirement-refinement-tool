@@ -1,22 +1,24 @@
-# Agent catalog
+# Agent responsibilities
 
-These are versioned role specifications, not autonomous background workers.
-All roles inherit `AGENTS.md` and have no external write permission in this baseline.
+Ten specialist role definitions remain available for editor-assisted work. All
+inherit AGENTS.md and the fixed Gherkin-first handoff standard. The executable
+product runner has two explicit stages (interview/draft and independent review);
+it does not automatically invoke all ten profiles.
 
 | Role | Responsibility |
 | --- | --- |
-| story-orchestrator | Existing-story run ownership, transitions and approval staging |
-| story-intake | New requirement interview, duplicate check and full pipeline parity |
-| story-investigator | Bounded, provenance-preserving investigation |
-| story-evaluator | Classify work and assess D1–D10 with L1–L8 evidence |
-| story-rewriter | Improve the draft without inventing requirements |
-| story-quality-gate | Independently assess the final artifact |
-| story-po-analyst | Look for evidenced answers before burdening the owner |
-| story-po-challenger | Challenge, sharpen and consolidate necessary questions |
-| story-po-responder | Incorporate authorized answers into a new local revision |
-| story-creator | Propose an evaluated specification breakdown |
+| story-orchestrator | Existing-request refinement and exact approval staging |
+| story-intake | Flexible plain-language input with the same final quality standard |
+| story-investigator | Applicable evidence, exact passages and consequential gaps |
+| story-evaluator | Cold-read, meaning, provenance and testability assessment |
+| story-rewriter | Precise source-linked statements and canonical Gherkin |
+| story-quality-gate | Independent statement/scenario review and ambiguity challenge |
+| story-po-analyst | Existing evidenced answers before asking an owner |
+| story-po-challenger | Necessary questions, scope and governed consolidation |
+| story-po-responder | Faithful incorporation of authorized current decisions |
+| story-creator | Proposed independent slices with source coverage |
 
-Review starts with orchestrator; new intake starts with intake; specification
-breakdown starts with creator. All other direct entry requests redirect to one
-of those. Intake and orchestrator may call the same analysis roles. PO response
-handling returns to the quality gate and approval, never straight to publication.
+Analysis roles cannot approve, modify trusted policy, authorize reference material,
+seal exports or write trackers. Native editor registrations and semantic performance
+require separate smoke tests. Checklist-only legacy exports are not final product
+handoffs. Do not claim a profile ran merely because its file exists.

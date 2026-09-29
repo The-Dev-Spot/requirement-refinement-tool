@@ -1,70 +1,80 @@
-# Security boundary — standalone v0.2
+# Security and data boundaries
 
-## Protect the controller, not just prompts
+Clarity processes untrusted requests, documents and model outputs. Requirements
+must be excellent, but a polished answer is not evidence, authority or permission.
+The repository remains private; do not import original corporate history, private
+corpora, real operational records, credentials or identifying examples.
 
-Keep the controller database, installed source and capability keys outside the
-agent workspace. The shipped agent profiles do not receive terminal, tracker-write,
-operator-key or provisioning permissions. A process with the controller's OS
-account can read its keys or rewrite its database/code; application role checks
-cannot sandbox that process. No protected network API or enterprise sign-in ships.
+## Trusted local controller
 
-Local capability keys are random 256-bit secrets stored only as hashes in SQLite.
-The API enforces author/reviewer/operator roles, stable actor roles and author
-ownership; identity means possession of an operator-provisioned capability, not
-proof of a person's legal identity or an enterprise account. Provision separate
-reviewer identities deliberately; aliases alone do not produce independent review.
-Provisioning is trusted OS-owner administration and must not be exposed to agents.
+Use a private POSIX workspace outside an untrusted agent's filesystem. Directory
+0700 and file0600 checks reject symlinks and unsafe ownership. Capability secrets
+are provisioned only by the OS-owner CLI; only hashes are stored in the database.
+Author/reviewer/operator roles are fixed. An author cannot independently review or
+approve the same draft. Authors cannot read other authors' briefs. Reviewers and
+operators span the trusted workspace: this is not project/tenant isolation.
 
-Use owner-only POSIX state directories (0700), files (0600), no symlinked ancestors,
-and a trusted local filesystem. Windows is rejected until proper ACL handling
-exists. Keys never belong in source, prompt text, command arguments or ordinary
-logs. The CLI accepts private credential files and does not print their contents.
-Revocation invalidates access and the issuing key's unused approvals.
+A process running as the controller's OS owner can read keys or alter code and
+state. These controls do not sandbox that process. Never give an analysis agent
+an unrestricted shell or operator key on that account. Separate identities do not
+prove genuinely independent models; arrange real reviewer separation operationally.
 
-## Approval and data integrity
+## Local web workbench
 
-An independently reviewed READY artifact is not permission to publish. Operators
-approve exact displayed plans bound to current snapshots, source/review hashes and
-policy fingerprints. Approvals expire within 900 seconds; changed revisions,
-answers, reviews, policies or credential status invalidate them. Sealing and
-approval consumption are atomic and repeatable without duplicate exports.
-Only local artifact sealing exists. No remote tracker mutation is enabled.
+The new server binds to 127.0.0.1 only. It enforces Host and POST Origin checks,
+CSRF tokens, strict form parsing, bounded inputs, server-held expiring sessions,
+HttpOnly SameSite=Strict cookies, logout, session rotation, escaped source content,
+no external assets, restrictive CSP and no-store responses. It exposes no key
+provisioning, arbitrary URL fetch, shell or policy administration route.
 
-Append-only events and immutable revisions have integrity hashes and SQL guards.
-These detect accidental corruption; they are not tamper-proof against a privileged
-owner. Backups contain private evidence but no authentication hashes/secrets.
-Protect and encrypt backup files separately. Restore requires a new workspace,
-verifies its retained digest, disables old keys and revokes unused approvals.
-Automatic deletion and external retention jobs are not implemented.
+It uses local HTTP, not TLS, and is not an internet-facing production server. Do
+not bind it publicly or place an internet reverse proxy in front of it. Local
+malware, browser extensions and the OS owner are outside this boundary. It has
+no enterprise SSO or multi-tenant authorization and must not be marketed as such.
 
-## Evidence and adversarial input
+## Models, evidence and approvals
 
-Requirements, comments, source documents, model assessments and learned rules are
-untrusted data, not tool instructions. Known suspicious instruction patterns flag
-a run for sticky quarantine. A clean scan is not proof of safety. The operator
-must inspect a clean revision before release; fresh independent review follows.
-The detector is heuristic and can miss obfuscation or non-English attacks.
+Model calls are opt-in. The only implemented transport calls an explicitly chosen
+Ollama model on loopback without redirects, proxies or model tools. Loopback does
+not guarantee local inference; verify the model is not cloud-backed and that the
+deployment is permitted to handle the selected data. Keys and sessions are never
+included in model packets. Budgets and strict JSON validation are not isolation.
+Credential-pattern checks reject known literal formats before model processing and
+handoff, but are not comprehensive secret detection. Redact data before capture.
 
-Machine checks cover grammar and selected deterministic/lexical rules. They do
-not verify semantic truth, source authority, relevance or every possible vague
-requirement. Evidence references must resolve inside the submitted snapshot;
-authenticity still needs review. No real-world semantic-accuracy claim is made.
+Captured references need operator-confirmed applicability; statements need exact
+quotations and immutable source hashes. These establish recorded provenance, not
+semantic entailment or independently verified remote authorship. Independent
+statement/scenario review and human approval remain necessary.
 
-The optional Linear importer uses one fixed HTTPS endpoint, read queries only,
-explicit team/project checks, bounded pagination, conservative error handling
-and no credential-bearing redirects. Use a team-restricted read-only key. The
-adapter has mocked contract tests, not a live integration certification.
-The offline workbench escapes data and forbids network/script/form activity;
-it is a static private snapshot, not a write-capable web application.
+Known instruction-pattern matches are review signals, not proof of an attack.
+An operator can record a false-positive decision bound to a particular finding,
+draft and context; changes invalidate that decision. A reviewer may explain a
+context-sensitive wording/style warning. Neither can use that route to waive a
+missing source, invalid Gherkin, incomplete coverage or other objective failure.
+No clean scan, confidence score or user silence grants approval.
 
-## Source hygiene
+Approvals bind exact file hashes, revision, policy/context/review/engine versions,
+profile and issuing credentials. They expire within 15 minutes. Revoked review or
+approval keys block pending handoffs. Sealing and consumption are one transaction;
+local idempotency is not remote exactly-once publishing. No remote writes exist.
 
-Do not commit private documents, real exports, runs, original archives, prior Git
-history, local MCP configuration, secrets or credentials. The small repository
-scanner is not a complete secret/anonymization tool. Perform human review and
-an independent scanner pass before broader distribution. Rotate an exposed key;
-deleting visible content does not remove prior exposure.
+## Recovery and disclosure
 
-Report security issues privately through an existing authorized owner channel.
-Never put secrets in public issues. Keep the repository private; anonymization
-does not establish ownership or redistribution rights.
+The versioned backup includes legacy and refinement records, not capability
+secrets/hashes. It is NOT encrypted and can contain sensitive source material.
+Keep it private with a separately retained digest. Restore into a new destination,
+check integrity and provision new credentials. All old keys are disabled; pending
+refinement handoffs need new independent review and approval. No automatic deletion.
+Hashes detect corruption, not an attacker replacing both a backup and its receipt.
+
+Handoff ZIPs contain source evidence and review records. Import only the approved
+acceptance.feature into test management, not the full evidence-bearing ZIP, unless
+you explicitly authorize that disclosure. Profiles are intended import targets;
+no live Xray compatibility or remote privacy guarantee has been established.
+
+The repository hygiene checker detects selected credentials, hosts and artifacts;
+it does not find all personal information, identifying terms or encoded secrets.
+Use independent scanning and human review before sharing. Rotate exposed real
+credentials rather than merely deleting visible text. Report problems privately
+to the repository owner; do not include sensitive payloads in public issues.

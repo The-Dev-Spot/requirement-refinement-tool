@@ -1,25 +1,22 @@
 {
-  "version": 3,
+  "version": 4,
   "implemented_workflow_engine": true,
-  "engine_scope": "Durable local submissions, independent reviews, owner answers, approvals and sealed exports; not autonomous model invocation",
+  "engine_scope": "Standalone raw-brief refinement, independent review and exact Gherkin handoff; legacy snapshot compatibility retained",
   "entrypoints": {
     "review": "story-orchestrator",
     "intake": "story-intake",
     "breakdown": "story-creator"
   },
   "waiting_states": [
-    "awaiting_review",
+    "captured",
     "awaiting_revision",
-    "awaiting_po",
-    "awaiting_approval"
+    "awaiting_decision",
+    "awaiting_review"
   ],
-  "approval_state": "approved",
-  "quarantine_state": "quarantined",
   "terminal_states": [
     "exported",
     "rejected"
   ],
-  "run_identity": "Stable run ID; imported source ID is immutable metadata",
   "approval": {
     "required": true,
     "authentication": "revocable local role capability",
@@ -29,17 +26,19 @@
   },
   "storage": {
     "engine": "sqlite",
-    "schema_version": 1,
+    "base_schema_version": 1,
+    "refinement_schema_version": 1,
     "immutable": [
-      "revisions",
-      "reviews",
-      "exports"
-    ],
-    "append_only": [
-      "events"
+      "refine_records",
+      "refine_exports"
     ],
     "automatic_deletion": false
   },
   "development_pipeline_integration": false,
-  "model_orchestration_implemented": false
+  "model_orchestration_implemented": true,
+  "model_orchestration_scope": "Two explicit opt-in bounded stages: interview/draft and fresh independent review",
+  "all_ten_roles_automatically_dispatched": false,
+  "canonical_acceptance_format": "gherkin",
+  "quality_threshold_depends_on_user_expertise": false,
+  "live_xray_validated": false
 }
