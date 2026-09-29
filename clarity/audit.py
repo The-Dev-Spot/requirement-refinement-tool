@@ -8,7 +8,7 @@ from urllib.parse import urlsplit
 
 from .guardrails import ValidationError
 
-ALLOWED_HOSTS = {"example.com", "example.invalid", "github.com", "api.github.com", "docs.github.com", "modelcontextprotocol.io", "cheatsheetseries.owasp.org", "cucumber.io"}
+ALLOWED_HOSTS = {"example.com", "example.invalid", "github.com", "api.github.com", "docs.github.com", "modelcontextprotocol.io", "cheatsheetseries.owasp.org", "cucumber.io", "api.linear.app", "linear.app", "www.sqlite.org", "pypi.org"}
 URL = re.compile(r"https?://[^\s<>\"')`]+")
 EMAIL = re.compile(r"\b[A-Z0-9._%+-]+@([A-Z0-9.-]+\.[A-Z]{2,})\b", re.I)
 SECRETS = (
@@ -53,7 +53,7 @@ def check_repository(root: Path) -> list[str]:
         forbidden = any(p in {".idea", "__pycache__", "node_modules", ".DS_Store", ".claude"} for p in parts)
         forbidden |= Path(name).name in {".env", "mcp.json", "project-config.local.json", "settings.local.json"}
         forbidden |= name.startswith((".clarity/", "knowledge/private/", "docs/agent/runs/"))
-        forbidden |= Path(name).suffix in {".zip", ".pyc", ".log", ".docx", ".pptx", ".pdf"}
+        forbidden |= Path(name).suffix in {".zip", ".pyc", ".log", ".docx", ".pptx", ".pdf", ".key", ".sqlite", ".sqlite3"}
         if forbidden:
             findings.append(name + ": forbidden runtime, private or binary artifact")
             continue

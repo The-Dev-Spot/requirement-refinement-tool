@@ -29,7 +29,9 @@ class PackagingTests(unittest.TestCase):
     def test_synthetic_fixture_and_runtime_contract(self):
         self.assertEqual(readiness(load_json(ROOT / "examples/complete-report.json"))["verdict"], "READY")
         contract = load_json(ROOT / ".github/agents/runtime-doc-contract.json")
-        self.assertFalse(contract["implemented_workflow_engine"])
+        self.assertTrue(contract["implemented_workflow_engine"])
+        self.assertFalse(contract["development_pipeline_integration"])
+        self.assertFalse(contract["model_orchestration_implemented"])
         self.assertFalse(contract["approval"]["live_publisher_implemented"])
 
 

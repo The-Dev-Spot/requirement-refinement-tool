@@ -1,11 +1,13 @@
-"""Offline CLI. No credentials, network calls, model calls or external writes."""
+"""Standalone Clarity CLI. No model calls or remote mutations."""
 from __future__ import annotations
 
 import argparse
 import json
 import sys
+import sqlite3
 from pathlib import Path
 
+from .commands import add_commands, execute
 from .audit import check_repository
 from .guardrails import ValidationError, load_config, load_json, readiness
 from .logbook import build
@@ -24,8 +26,11 @@ def main(argv: list[str] | None = None) -> int:
     log.add_argument("run_id")
     log.add_argument("--run-dir", type=Path, required=True)
     log.add_argument("--config", type=Path, default=Path(".github/project-config.json"))
+    add_commands(sub)
     args = parser.parse_args(argv)
     try:
+        if args.command in {"work", "lint", "import-markdown", "linear-read", "benchmark"}:
+            return execute(args)
         if args.command == "validate-config":
             load_config(args.config)
             print("Configuration valid. Live writes disabled.")
@@ -56,6 +61,12 @@ def main(argv: list[str] | None = None) -> int:
                 fh.write("\n")
             print("Local evidence preview and manifest created. Nothing was published.")
         return 0
+    except (KeyError, TypeError, RecursionError):
+        print("ERROR: Malformed structured input; no operation completed.", file=sys.stderr)
+        return 2
+    except sqlite3.Error:
+        print("ERROR: Local storage operation failed; refresh state and verify integrity before retrying.", file=sys.stderr)
+        return 2
     except (ValidationError, OSError, ValueError) as exc:
         # Never include input payloads, raw responses or credential values here.
         print("ERROR: " + str(exc), file=sys.stderr)

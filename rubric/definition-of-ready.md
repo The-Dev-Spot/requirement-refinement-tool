@@ -1,6 +1,6 @@
 # Definition of Ready
 
-Personal baseline v1, pending owner ratification. The north star is the cold-read
+Standalone rubric v1; semantic judgments remain reviewer responsibilities. The north star is the cold-read
 test: could an unfamiliar developer build the intended outcome without guessing?
 These identifiers preserve the original review dimensions. No project-specific
 custom field determines the type of work in this baseline.
@@ -46,9 +46,18 @@ omitting the dimension. Model judgments require human review for material risks.
 | L7 | Exact open-question marker syntax | Hard |
 | L8 | Prefer established canonical step wording | Advisory |
 
-The full linter is NOT implemented. The CLI combines supplied statuses; it does
-not run L1-L8 or verify their truth. Use an actual parser for Gherkin: preferred
-Given/When/Then narrative ordering is not the same thing as grammar validity.
+The standalone runtime runs L1-L8 through `clarity/lint.py`. L1 uses the pinned
+official Gherkin parser/compiler, or a structured outcome checklist with an explicit
+`| Verify:` method. L2 checks risk/type/scope tag namespaces; L3 uses a finite
+English vagueness vocabulary; L4 flags common UI choreography; L5 checks selected
+risk IDs; L6 checks structured provenance presence (schema validation checks its
+fields); L7 validates exact question markers; L8 compares against an explicitly
+selected catalog, when present. These are scoped machine rules, not a complete
+semantic linter. Non-English lexical checks remain NOT_RUN. Missing parser means
+NOT_RUN. Preferred narrative ordering is not the same thing as grammar validity.
+The legacy `gate` command still only combines supplied scores and cannot modify
+trusted run state. A passing syntax check does not verify outcome measurability,
+citation truth, applicability or business correctness.
 
 Exact marker on its own line: `# OPEN QUESTION -> PO: <specific question>`.
 Use stable question IDs in run records; text deduplication is only a helper.

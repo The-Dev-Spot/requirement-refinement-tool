@@ -26,3 +26,9 @@ Thumbs.db
 *.docx
 *.pptx
 *.pdf
+
+# Standalone private state and capability files
+*.sqlite*
+*.key
+*.backup.json
+*.review.html

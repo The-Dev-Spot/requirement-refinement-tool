@@ -7,8 +7,10 @@ inference and proposal. Do not replace a failed check with a weaker prompt.
 Before proposing a change:
 
 ```sh
+python -m pip install --require-hashes --only-binary=:all: -r requirements.lock
 python -m clarity validate-config
 python -m unittest discover -s tests -v
+python -m clarity benchmark examples/rule-benchmark.json
 git add <reviewed-files>
 python -m clarity check-repo
 ```

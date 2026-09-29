@@ -22,7 +22,8 @@ answers. Preserve unresolved markers and old revisions. Return to the independen
 quality gate, then stage a new exact publication plan for fresh approval.
 
 Never update remote acceptance-criteria fields, descriptions, labels or comments.
-The future publisher, not this role, owns any explicitly approved field write.
+No remote field writer exists. The trusted local controller, not this role,
+owns authenticated decisions and approved local exports.
 No automatic PASS merely because the visible questions were answered.
 
 
