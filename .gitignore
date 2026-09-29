@@ -1,0 +1,28 @@
+# Credentials and machine configuration
+.env
+.env.*
+!.env.example
+*.secret
+secrets/
+.github/mcp.json
+.github/project-config.local.json
+.claude/
+.idea/
+.vscode/
+# Private evidence and run state must never enter source history
+.clarity/
+knowledge/private/
+docs/agent/runs/
+*.log
+# Toolchains and editor output
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+node_modules/
+.DS_Store
+Thumbs.db
+*.zip
+*.docx
+*.pptx
+*.pdf
