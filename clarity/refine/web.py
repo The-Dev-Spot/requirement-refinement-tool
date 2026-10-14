@@ -161,7 +161,9 @@ class Handler(BaseHTTPRequestHandler):
     def respond(self, code, body, content_type='text/html; charset=utf-8', location=None, download=None):
         encoded = body.encode() if isinstance(body, str) else body
         self.send_response(code)
-        for key, value in {'Content-Type': content_type, 'Content-Length': str(len(encoded)), 'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer', 'X-Content-Type-Options': 'nosniff', 'X-Frame-Options': 'DENY', 'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'"}.items():
+        # A global no-referrer policy makes browser form POSTs send Origin: null.
+        # Preserve same-origin form headers while suppressing external referrers.
+        for key, value in {'Content-Type': content_type, 'Content-Length': str(len(encoded)), 'Cache-Control': 'no-store', 'Referrer-Policy': 'same-origin', 'X-Content-Type-Options': 'nosniff', 'X-Frame-Options': 'DENY', 'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'"}.items():
             self.send_header(key, value)
         if self.new_cookie:
             self.send_header('Set-Cookie', 'clarity_session=' + self.new_cookie + '; HttpOnly; SameSite=Strict; Path=/; Max-Age=3600')
@@ -187,7 +189,7 @@ class Handler(BaseHTTPRequestHandler):
             parts = urlsplit(self.path); path = parts.path
             token = session['token']
             if not token:
-                body = '<section><h2>Sign in to this local workspace</h2>' + form('/login', session['csrf'], field('token', 'Your workspace capability', kind='password'), 'Sign in') + '<small>Keys are never placed in browser storage or URLs. This is a trusted local workspace, not a hosted multi-tenant service.</small></section>'
+                body = '<section><h2>Sign in to this local workspace</h2>' + form('/login', session['csrf'], field('token', 'Workspace login key', kind='password'), 'Sign in') + '<small>Paste the contents of your author.key, reviewer.key or operator.key file created during setup. This key selects your workspace role.</small><small>Keys are never placed in browser storage or URLs. This is a trusted local workspace, not a hosted multi-tenant service.</small></section>'
                 return self.respond(200, page('Welcome', body))
             if path == '/':
                 runs = self.server.controller.list_runs(token)
