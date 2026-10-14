@@ -31,12 +31,14 @@ def main(argv=None):
         if name == 'capture':
             cmd.add_argument('--project', required=True); cmd.add_argument('--brief-file', type=Path, required=True); cmd.add_argument('--presentation', choices=['guided', 'concise'], default='guided')
         elif name == 'plan': cmd.add_argument('--profile', choices=['cucumber', 'xray-cloud', 'xray-server-dc'], default='cucumber')
-        elif name == 'seal': cmd.add_argument('--approval', type=int, required=True); cmd.add_argument('--output', type=Path, required=True)
+        elif name == 'seal':
+            cmd.add_argument('--approval', type=int, required=True); cmd.add_argument('--output', type=Path, required=True)
+            cmd.add_argument('--full-audit', action='store_true', help='Include private evidence, traceability, review and manifest; default is the two delivery files')
         elif name == 'action':
             cmd.add_argument('action', choices=['submit', 'review', 'ask', 'answer', 'source', 'confirm-source', 'approve', 'resolve-signal', 'resolve-question', 'new-cycle'])
             cmd.add_argument('--version', type=int, required=True); cmd.add_argument('--input', type=Path, required=True)
         elif name == 'stage':
-            cmd.add_argument('stage', choices=['draft', 'review']); cmd.add_argument('--version', type=int, required=True); cmd.add_argument('--model', required=True); cmd.add_argument('--ollama-port', type=int, default=11434)
+            cmd.add_argument('stage', choices=['intake', 'draft', 'revise', 'review']); cmd.add_argument('--version', type=int, required=True); cmd.add_argument('--model', required=True); cmd.add_argument('--ollama-port', type=int, default=11434)
         elif name == 'policy': cmd.add_argument('--project', required=True); cmd.add_argument('--input', type=Path, required=True)
     args = parser.parse_args(argv)
     try:
@@ -75,7 +77,7 @@ def main(argv=None):
         elif args.command == 'verify': result = c.verify(token, args.id)
         elif args.command == 'seal':
             result = c.seal(token, args.id, args.approval)
-            write_private(args.output, archive(result))
+            write_private(args.output, archive(result, full_audit=args.full_audit))
             print('Approved local handoff written. Nothing was uploaded to a tracker.')
             return 0
         elif args.command == 'policy': result = {'policy_record': c.set_policy(token, args.project, data)}

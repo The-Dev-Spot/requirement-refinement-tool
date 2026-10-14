@@ -14,6 +14,7 @@ pages expose explicit role-specific actions; providers and assistants cannot app
 | `jobs.py` | Two bounded background inference slots, durable status and cooperative cancellation |
 | `refine/worker.py`, `connections.py`, `local_model.py` | Explicit model/source transports, bounded packets and strict output validation |
 | `refine/checks.py`, `schemas.py` | Official Gherkin parsing, multiline outline checks, coverage, provenance and provider JSON schemas |
+| `efficiency.py`, `refine/revisions.py` | Compact prompt projections, token estimates/accounting and digest-bound edits assembled into full drafts |
 | `backup.py`, `backup_crypto.py` | Consistent versioned snapshots and authenticated passphrase encryption |
 | `evaluation.py`, `handoff_check.py` | Grouped repeated trials and read-only Xray pilot receipt checks |
 
@@ -40,7 +41,11 @@ performs remote publication or creates executable step definitions.
 The base database and additive refinement/configuration namespaces have explicit
 schema versions. Backups include all supported non-secret namespaces. Unknown or
 partial namespaces fail closed. Read transactions do not reserve the writer lock;
-no speculative cache is added for a small local workload.
+status reads decode the run history once. A bounded 16-entry cache reuses only pure
+display checks keyed by the full draft, selected sources, policy and freshly
+computed engine hash. Returned results are detached. Authentication, context and
+record integrity are checked on every read; review/approval/seal use fresh checks.
+Source/model lists query latest versions while retaining historical rows for audit.
 
 Wheels contain the human quality contracts needed to compute the engine digest,
 so installed operation does not depend on a repository checkout. Canonical copies

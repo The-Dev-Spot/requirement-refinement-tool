@@ -1,5 +1,5 @@
 {
-  "version": 4,
+  "version": 5,
   "implemented_workflow_engine": true,
   "engine_scope": "Local configuration/source workbench, scoped coding-assistant MCP, bounded direct inference and exact Gherkin handoff",
   "entrypoints": {
@@ -38,7 +38,7 @@
   },
   "development_pipeline_integration": false,
   "model_orchestration_implemented": true,
-  "model_orchestration_scope": "Explicit host-assistant task/result bridge or two bounded direct-model stages",
+  "model_orchestration_scope": "Explicit host-assistant task/result bridge or bounded draft/review calls, with optional intake and digest-bound targeted revision; no automatic extra stages",
   "all_ten_roles_automatically_dispatched": false,
   "canonical_acceptance_format": "gherkin",
   "quality_threshold_depends_on_user_expertise": false,

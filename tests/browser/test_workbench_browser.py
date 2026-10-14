@@ -5,6 +5,7 @@ import unittest
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlsplit
+from unittest.mock import patch
 
 from playwright.sync_api import sync_playwright
 
@@ -13,6 +14,7 @@ sys.path[:0] = [str(ROOT), str(ROOT / 'tests')]
 
 from clarity.refine.web import Workbench
 from test_refine_controller import Fixture
+from test_refine_worker_web import FakeProvider
 
 
 class BrowserWorkbenchTests(Fixture):
@@ -121,6 +123,39 @@ class BrowserWorkbenchTests(Fixture):
             finally:
                 destination.shutdown()
                 thread.join(timeout=2)
+
+    def test_browser_stage_limits_budget_and_optional_intake(self):
+        self.page.goto(self.server.origin)
+        self.page.locator('input[name=token]').fill(self.o)
+        self.submit('/login', 'Sign in')
+        self.page.get_by_role('link', name='Setup', exact=True).click()
+        editor = self.page.locator('form[action="/settings/model"]')
+        editor.locator('input[name=id]').fill('INTAKE')
+        editor.locator('select[name=provider]').select_option('ollama')
+        editor.locator('input[name=model]').fill('synthetic-small-model')
+        editor.locator('summary').filter(has_text='Efficiency and stage settings').click()
+        editor.locator('select[name=stage]').select_option('intake')
+        editor.locator('input[name=context_tokens]').fill('8192')
+        editor.locator('input[name=intake_max_tokens]').fill('512')
+        self.submit('/settings/model', 'Save model profile')
+        saved = self.server.workspace.records(self.o, 'model')[0]
+        self.assertEqual((saved['context_tokens'], saved['intake_max_tokens'], saved['stage']), (8192, 512, 'intake'))
+        self.page.goto(self.server.origin)
+        self.submit('/logout', 'Sign out')
+        self.page.locator('input[name=token]').fill(self.a)
+        self.submit('/login', 'Sign in')
+        self.page.goto(self.server.origin + '/run/REQ1')
+        self.page.locator('summary').filter(has_text='Input and output budgets before running').click()
+        self.assertEqual(self.page.get_by_role('cell', name='512', exact=True).count(), 1)
+        provider = FakeProvider({'questions': [], 'ready_to_draft': True})
+        provider.max_tokens, provider.context_tokens = 512, 8192
+        with patch.object(self.server.workspace, 'provider', return_value=provider):
+            self.submit('/run/REQ1/model-profile', 'Check missing decisions only (optional)')
+            self.server.jobs.pool.shutdown(wait=True)
+        self.page.reload()
+        self.assertEqual(self.c.status(self.a, 'REQ1')['run']['revision'], 0)
+        self.assertEqual(self.page.get_by_role('heading', name='Requirement efficiency', exact=True).count(), 1)
+        self.assertEqual(self.posts[-1], ('/run/REQ1/model-profile', self.server.origin))
 
 
 if __name__ == '__main__':

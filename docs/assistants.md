@@ -41,12 +41,19 @@ args = ["mcp", "--state", "/absolute/private/state", "--key-file", "/absolute/pr
 ```
 
 Client configuration may allow access to other tools or files. Review those
-permissions in that client. Clarity's MCP server exposes only two tools:
+permissions in that client. Clarity's MCP server exposes three scoped tools:
 
 | Tool | Behavior |
 | --- | --- |
 | `clarity_get_task` | Current selected requirement, sources, system instructions, JSON schema, version and context digest |
+| `clarity_get_findings` | Current findings without repeating draft/evidence; `include_examples: true` requests expanded example diagnostics |
 | `clarity_submit_result` | Author questions/draft or independent reviewer result; rejects stale versions/context |
+
+Submission returns a compact receipt and findings. Retrieve diagnostics only when
+needed. Author tasks default to a complete draft for a new requirement and targeted
+revision when a draft exists. Clarity assembles and validates the complete revision
+before fresh review. Append `--stage intake` for optional questions-only intake,
+or `--stage draft` for a complete rewrite. Intake advice is not an approved requirement.
 
 No key values appear in a task packet. The MCP process reads its designated private
 key file. Never give it an operator key. Host-assistant inference is governed by
@@ -71,6 +78,13 @@ and task to the chosen model, then paste its JSON into **Import assistant result
 manually**. Submit from the same page version; refresh and regenerate if context
 changes. An author result contains either questions or a draft, never both.
 A reviewer result follows the review contract. There is no free-form-text bypass.
+Author imports also accept the intake or targeted-revision contract from the selected
+task packet. The original full-draft contract remains supported. Source/policy
+changes reject old packets even when their workflow version has not changed.
+
+Use one requirement per conversation. Read the supplied task and needed diagnostics;
+there is no need to reread all ten profile files or every exported audit document.
+Client conversation usage is outside Clarity's telemetry; see [efficiency](efficiency.md).
 
 ## Client references
 

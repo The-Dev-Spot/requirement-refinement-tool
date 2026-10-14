@@ -10,11 +10,14 @@ from .storage import private_path, write_private
 def add(sub):
     bundle = sub.add_parser('source-bundle', help='Clean committed source snapshot without Git history or runtime state')
     bundle.add_argument('--root', type=Path, default=Path.cwd()); bundle.add_argument('--output', type=Path, required=True)
-    for name in ('setup', 'start', 'doctor', 'mcp', 'backup', 'restore'):
+    for name in ('setup', 'start', 'doctor', 'mcp', 'efficiency', 'backup', 'restore'):
         cmd = sub.add_parser(name)
         if name != 'restore': cmd.add_argument('--state', type=Path, default=DEFAULT_STATE)
         if name == 'start': cmd.add_argument('--port', type=int, default=8765)
         if name == 'mcp':
+            cmd.add_argument('--key-file', type=Path, required=True); cmd.add_argument('--id', required=True)
+            cmd.add_argument('--stage', choices=['intake', 'draft', 'revise', 'review'], help='Optional stage; author tasks otherwise use targeted revision when a draft exists')
+        if name == 'efficiency':
             cmd.add_argument('--key-file', type=Path, required=True); cmd.add_argument('--id', required=True)
         if name == 'backup':
             cmd.add_argument('--key-file', type=Path, required=True); cmd.add_argument('--output', type=Path, required=True)
@@ -42,7 +45,11 @@ def execute(args):
             except KeyboardInterrupt: pass
     elif args.command == 'mcp':
         from .host_bridge import serve
-        serve(args.state, args.key_file, args.id)
+        serve(args.state, args.key_file, args.id, stage=args.stage)
+    elif args.command == 'efficiency':
+        from .refine.controller import Controller
+        private_path(args.key_file); require(args.key_file.stat().st_size < 256, 'Invalid credential file')
+        print(json.dumps(Controller(args.state).status(args.key_file.read_text().strip(), args.id)['efficiency'], indent=2))
     elif args.command == 'backup':
         from .backup import backup
         from .backup_crypto import encrypt

@@ -12,6 +12,7 @@ from .refine.contracts import require
 from .refine.controller import Controller
 from .refine.identity import authenticate
 from .refine.worker import prepare, run_stage
+from .efficiency import AUTHOR_STAGES
 from .storage import transaction, private_path
 
 
@@ -50,8 +51,8 @@ class Jobs:
 
     def start(self, token, run_id, expected, stage, provider):
         c = Controller(self.root); status = c.status(token, run_id)
-        prepare(c, token, run_id, expected, stage, status)
-        who = status['actor']; require(who['role'] == ('author' if stage == 'draft' else 'reviewer'), 'This role cannot run the selected stage')
+        prepare(c, token, run_id, expected, stage, status, provider)
+        who = status['actor']; require(who['role'] == ('author' if stage in AUTHOR_STAGES else 'reviewer'), 'This role cannot run the selected stage')
         require(status['run']['version'] == expected, 'Refresh the requirement before starting inference')
         with self.lock:
             with transaction(self.root) as db:

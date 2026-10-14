@@ -51,7 +51,7 @@ with setup, start and doctor to choose another private location.
 
 Open a requirement's **Connect your assistant** panel for client configuration.
 Assistant login stays in that client; subscriptions are not reused as API keys.
-The bridge exposes task retrieval and result submission for one requirement.
+The bridge exposes task retrieval, result submission and on-demand diagnostics for one requirement.
 It cannot answer owner questions, configure policy, approve or publish.
 See [assistant setup](docs/assistants.md) and [model setup](docs/models.md).
 
@@ -63,19 +63,21 @@ team, project or space. Captured versions retain their source locator, revision,
 effective date when known and retrieval time. An operator confirms applicability.
 Attach only the relevant excerpts; changes require a fresh draft and review.
 
-A sealed handoff includes the requirement, unchanged `acceptance.feature`, coverage,
-citations, selected evidence, independent review and a hash manifest. Approval binds
+The normal download contains **requirement.md** and the unchanged **acceptance.feature**.
+The full sealed audit bundle retains coverage, citations, selected evidence,
+independent review and a hash manifest; download it separately when needed. Approval binds
 that exact revision and expires after 15 minutes. Unresolved questions, unsupported
 claims and objective quality failures block delivery.
 
-Import only **acceptance.feature** into test management. The ZIP contains selected
-evidence. Cucumber, Xray Cloud and Xray Server/DC profiles are local export choices;
+Import only **acceptance.feature** into test management. The full audit ZIP contains
+selected evidence. Cucumber, Xray Cloud and Xray Server/DC profiles are local export choices;
 no tracker write or verified live import is implied. See [the Xray pilot](docs/xray-pilot.md).
 
 ## Guides
 
 - [First run and daily use](docs/refinement-workflow.md)
 - [Assistant connections](docs/assistants.md) and [local/cloud model setup](docs/models.md)
+- [Efficient model use, smaller handoffs and usage measurements](docs/efficiency.md)
 - [Source management](docs/sources.md), [backup and recovery](docs/recovery.md), [troubleshooting](docs/troubleshooting.md)
 - [Handoff standard](docs/handoff-standard.md), [operating contract](AGENTS.md), [security](SECURITY.md)
 - [Quality evaluation](docs/evaluation.md), [architecture](docs/architecture.md), [remaining qualification](docs/roadmap.md)

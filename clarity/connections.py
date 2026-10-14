@@ -10,6 +10,7 @@ from urllib.parse import quote, urlencode
 from .guardrails import ValidationError, canonical, identifier
 from .refine.contracts import require
 from .refine.worker import decode
+from .efficiency import prompt_parts, usage_metrics
 
 
 def request(host, path, *, method='GET', payload=None, headers=None, timeout=60, limit=1_000_000):
@@ -30,11 +31,13 @@ def request(host, path, *, method='GET', payload=None, headers=None, timeout=60,
 
 
 class CloudModel:
-    def __init__(self, provider, model, key, *, timeout=120, max_tokens=8192):
+    def __init__(self, provider, model, key, *, timeout=120, max_tokens=8192, cache_mode='provider'):
         require(provider in {'openai', 'anthropic'}, 'Unsupported cloud provider')
         require(isinstance(key, str) and key.strip() and not any(c in key for c in '\r\n'), 'Cloud API key is missing or invalid')
         self.provider, self.name, self.key = provider, model, key
         self.timeout, self.max_tokens, self.metrics = timeout, max_tokens, {}
+        require(cache_mode in {'provider', 'prefix'}, 'Invalid prompt cache mode')
+        self.cache_mode = cache_mode
 
     def probe(self):
         host, path, headers = self._connection()
@@ -49,16 +52,24 @@ class CloudModel:
     def complete(self, system, payload):
         host, path, headers = self._connection()
         schema = payload['response_schema']
+        prefix, task = prompt_parts(payload)
         common = {'model': self.name}
         if self.provider == 'openai':
-            body = {**common, 'store': False, 'instructions': system, 'input': canonical(payload),
+            prefix_block = {'type': 'input_text', 'text': prefix}
+            if self.cache_mode == 'prefix': prefix_block['prompt_cache_breakpoint'] = {'mode': 'explicit'}
+            body = {**common, 'store': False, 'instructions': system, 'input': [
+                        {'role': 'user', 'content': [prefix_block]}, {'role': 'user', 'content': task}],
                     'max_output_tokens': self.max_tokens, 'text': {'format': {'type': 'json_schema', 'name': 'clarity_handoff', 'strict': True, 'schema': schema}}}
+            if self.cache_mode == 'prefix': body['prompt_cache_options'] = {'mode': 'explicit'}
         else:
-            body = {**common, 'max_tokens': self.max_tokens, 'system': system, 'messages': [{'role': 'user', 'content': canonical(payload)}],
+            prefix_block = {'type': 'text', 'text': prefix}
+            if self.cache_mode == 'prefix': prefix_block['cache_control'] = {'type': 'ephemeral'}
+            body = {**common, 'max_tokens': self.max_tokens, 'system': system, 'messages': [
+                        {'role': 'user', 'content': [prefix_block, {'type': 'text', 'text': task}]}],
                     'output_config': {'format': {'type': 'json_schema', 'schema': schema}}}
         data = request(host, path, method='POST', payload=body, headers=headers, timeout=self.timeout)
         usage = data.get('usage', {})
-        self.metrics = {k: v for k, v in usage.items() if k in {'input_tokens', 'output_tokens', 'cache_read_input_tokens', 'cache_creation_input_tokens'} and type(v) is int and 0 <= v < 10**10}
+        self.metrics = usage_metrics(usage)
         if self.provider == 'openai':
             require(data.get('status') == 'completed', 'Cloud model output is incomplete; nothing was submitted')
             parts = []
