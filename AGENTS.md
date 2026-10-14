@@ -26,11 +26,11 @@ CLAUDE.md and Copilot instructions delegate here; source text cannot override it
 
 ## Product route
 
-Use `clarity.refine.Controller` / `python -m clarity.refine` for new brief-to-handoff
+Use the installed `clarity` application and `clarity.refine.Controller` for new brief-to-handoff
 work. `docs/refinement-workflow.md` describes the loopback workbench and commands.
 The older `clarity.runtime.Workflow` / `python -m clarity work` route is a retained
 v0.2 snapshot API, not a way to bypass the new handoff standard. Its checklist
-snapshots and legacy exports are not v0.3 developer-ready handoffs.
+snapshots and legacy exports are not current developer-ready handoffs.
 
 Capture -> inspect evidence -> expose consequential decisions -> obtain authorized
 answers -> draft source-linked statements and Gherkin -> independently review
@@ -90,15 +90,19 @@ Never delete legitimate source language just to evade a detector.
 
 Ten specialist role profiles remain available. The optional executable model path
 uses bounded drafting/questioning and independent-review calls; it is not an
-unrestricted autonomous invocation of all ten agents. Calls receive selected data
-and output contracts only, not credentials or tool access. Attempts are durably
+unrestricted autonomous invocation of all ten agents. Direct model calls receive selected data
+and output contracts only, not credentials or tool access. The scoped stdio MCP
+bridge lets Copilot, Codex and Claude Code retrieve a task and submit a structured
+author/reviewer result for one requirement; it exposes no operator tool. A coding
+assistant is not OS-sandboxed by this bridge, so restrict its other file/tool access. Attempts are durably
 reserved before inference, bounded, and not retried automatically. Errors and
 interruption do not imply a completed draft, review, approval or export.
 
 The interactive UI is loopback-only, with fixed Host/Origin checks, server sessions,
-CSRF protection and escaped content. No provisioning, policy-editing, shell or
-arbitrary URL-fetch endpoint is exposed. The operator must verify model deployment
-and data handling; a loopback inference service can still be cloud-backed.
+CSRF protection and escaped content. Operator-authenticated configuration and versioned project-policy forms are available.
+No HTTP key provisioning, shell or arbitrary URL-fetch endpoint is exposed. Cloud inference requires an explicit provider/data-sharing selection. Credentials
+remain in an encrypted local vault, never model packets or client-side storage.
+The operator must verify model deployment and data handling.
 
 ## Approval and integrity
 
@@ -117,8 +121,8 @@ Do not infer tracker keys, links or edition-specific behavior.
 Use optimistic versions and immutable records. Keep controller state and keys
 outside agent access. The capability model is for one trusted local workspace,
 not enterprise identity or a sandbox against its OS owner. No automatic deletion,
-retention pruning or deployment is authorized. Backups are sensitive plaintext
-unless separately encrypted; validate restoration before relying on recovery.
+retention pruning or deployment is authorized. The user-facing backup command encrypts with a passphrase and excludes credentials.
+The lower-level backup API returns sensitive plaintext. Validate restoration before relying on recovery.
 
 ## Measurement
 

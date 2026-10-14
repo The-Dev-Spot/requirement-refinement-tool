@@ -178,6 +178,7 @@ class WorkbenchTests(Fixture):
         self.assertEqual(code, 200)
         self.assertIn("default-src 'none'", headers['Content-Security-Policy'])
         self.assertEqual(headers['Cache-Control'], 'no-store')
+        self.assertEqual(headers['Referrer-Policy'], 'same-origin')
         self.assertNotIn(self.a, body)
 
     def test_host_header_rebinding_rejected(self):
@@ -192,6 +193,23 @@ class WorkbenchTests(Fixture):
         result = self.request('POST', '/create', {'csrf': self.csrf(body), 'id': 'REQ2', 'project': 'PERSONAL', 'brief': 'Plain input', 'presentation': 'guided'}, {'Origin': 'http://' + 'attacker.invalid'})
         self.assertEqual(result[0], 400)
         self.assertEqual(len(self.c.list_runs(self.a)), 1)
+
+    def test_null_origin_is_still_rejected_before_login(self):
+        _, _, body = self.request()
+        result = self.request('POST', '/login', {'csrf': self.csrf(body), 'token': self.a}, {'Origin': 'null'})
+        self.assertEqual(result[0], 400)
+        self.assertIn('Cross-origin changes are not allowed', result[2])
+        _, _, body = self.request()
+        self.assertIn('Sign in to this local workspace', body)
+
+    def test_missing_origin_is_still_rejected_before_login(self):
+        _, _, body = self.request()
+        conn = http.client.HTTPConnection('127.0.0.1', self.server.server_port, timeout=5)
+        conn.request('POST', '/login', body=urlencode({'csrf': self.csrf(body), 'token': self.a}), headers={'Content-Type': 'application/x-www-form-urlencoded', 'Cookie': self.cookie})
+        response = conn.getresponse()
+        self.assertEqual(response.status, 400)
+        self.assertIn(b'Cross-origin changes are not allowed', response.read())
+        conn.close()
 
     def test_invalid_csrf_rejected(self):
         self.login()

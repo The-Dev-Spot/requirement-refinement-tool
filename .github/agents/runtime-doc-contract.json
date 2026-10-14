@@ -1,7 +1,7 @@
 {
   "version": 4,
   "implemented_workflow_engine": true,
-  "engine_scope": "Standalone raw-brief refinement, independent review and exact Gherkin handoff; legacy snapshot compatibility retained",
+  "engine_scope": "Local configuration/source workbench, scoped coding-assistant MCP, bounded direct inference and exact Gherkin handoff",
   "entrypoints": {
     "review": "story-orchestrator",
     "intake": "story-intake",
@@ -32,13 +32,16 @@
       "refine_records",
       "refine_exports"
     ],
-    "automatic_deletion": false
+    "automatic_deletion": false,
+    "workspace_schema_version": 1,
+    "encrypted_user_backups": true
   },
   "development_pipeline_integration": false,
   "model_orchestration_implemented": true,
-  "model_orchestration_scope": "Two explicit opt-in bounded stages: interview/draft and fresh independent review",
+  "model_orchestration_scope": "Explicit host-assistant task/result bridge or two bounded direct-model stages",
   "all_ten_roles_automatically_dispatched": false,
   "canonical_acceptance_format": "gherkin",
   "quality_threshold_depends_on_user_expertise": false,
-  "live_xray_validated": false
+  "live_xray_validated": false,
+  "assistant_bridge_implemented": true
 }

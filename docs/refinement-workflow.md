@@ -1,140 +1,85 @@
-# Standalone brief-to-Gherkin walkthrough
+# First run and daily use
 
-Run commands from a repository checkout, using Python 3.11+ on POSIX. Keep the
-controller account, state and keys outside an untrusted agent workspace.
+## Install and launch
 
-## Initialize and provision
+Follow the commands in the [README](../README.md). Run `clarity setup` once, then
+`clarity start`. Setup is repeatable: it adds current application tables and creates
+missing role keys without replacing existing state. Back up an existing workspace
+before upgrading it. Unknown schema versions are rejected.
 
-```sh
-python -m pip install --require-hashes --only-binary=:all: -r requirements.lock
-STATE="$HOME/.local/state/clarity"
-KEYS="$HOME/.config/clarity-keys"
-mkdir -p -m 700 "$KEYS"
-python -m clarity.refine --state "$STATE" init
-python -m clarity.refine --state "$STATE" key --actor author --role author --output "$KEYS/author.key"
-python -m clarity.refine --state "$STATE" key --actor independent-reviewer --role reviewer --output "$KEYS/reviewer.key"
-python -m clarity.refine --state "$STATE" key --actor requirement-owner --role operator --output "$KEYS/operator.key"
-python -m clarity.refine --state "$STATE" serve
-```
+Open the exact `http://127.0.0.1:8765` address. A login key is the contents of a
+private file, not its filename. Setup prints its absolute location. Use operator
+for setup and decisions, author for drafting, and reviewer for independent review.
+These are roles within your local workspace; they do not require three user accounts.
 
-Provisioning is OS-owner administration, never an agent or HTTP action. Output
-files are exclusive and owner-only; secrets are not printed. An actor cannot take
-both author and reviewer roles. Separate key names alone do not establish genuine
-independent human/model review; provision the appropriate trusted reviewers.
+## Configure the workspace
 
-`init` creates the core workspace only if it does not already exist, then performs
-an additive transactional migration of four refinement tables. It does not replace
-existing v0.2 runs. Unknown or partial schema versions are rejected. Take an explicit
-backup before upgrading a workspace containing valuable records.
+As operator, open **Setup**. Prefer your existing coding assistant or add an Ollama
+or local OpenAI-compatible profile. Enter its exact model ID and port, save, then
+explicitly test structured output. Checks send synthetic data. An edited profile
+no longer displays results from its previous configuration.
 
-## Use the workbench
+Add a source connection if needed. Otherwise the source library accepts pasted
+text or UTF-8 text/Markdown files. Configure project risk IDs, reusable steps and
+call/rewrite budgets in **Project quality settings**. Defaults allow six model
+calls and three rewrites per cycle. The ten specialist definitions are available
+as references; they are not all automatically invoked.
 
-Open the printed loopback address and sign in with an appropriate capability key.
-The browser stores an opaque session ID, not the capability. Sign-in rotates the
-session; sessions expire after one hour. No key is placed in a URL. Do not expose
-this listener through a tunnel or public reverse proxy.
+## Capture, investigate and decide
 
-An **author** can capture an ordinary-language request, add selected reference
-excerpts, ask decision-focused questions and submit a draft. The request need not
-already contain professional analysis or acceptance criteria. Guided versus concise
-presentation does not change the quality standard.
+1. Sign in as author. On **Requirements**, describe what needs to change and why.
+   Leave Brief ID blank to generate one; keep a stable project ID.
+2. In **Sources**, save relevant policy or notes. Inspect an imported issue/page
+   before attaching it to the requirement. Choose whether a new version supplements
+   or replaces an attached reference.
+3. Connect your assistant or select a saved model on the requirement page.
+   The packet contains only the selected evidence, decisions, current policy and
+   output contract. A pending decision pauses further model drafting.
+4. Sign in as operator. Confirm source applicability with a reason, then answer the
+   next question. Each question explains why the answer affects behavior or testing.
+   Resolve duplicates or scope exclusions explicitly; unanswered facts are not assumed.
+5. Return to the author role and draft again using the updated context.
 
-An **operator** confirms whether references have authority and apply to this need,
-answers business questions, records explicit duplicate/scope resolutions and later
-approves the exact handoff. A requester lacking authority is helped to obtain the
-correct decision, not encouraged to invent it. Changing an answer retires its old
-decision source and forces a new revision/review.
+A useful example-mapping session starts with the agreed rule, then asks for one
+ordinary example, a refusal/exception, an exact boundary and an alternative path.
+Use the question form for any missing business decision. The draft's coverage table
+shows which scenarios cover each category and why a category may not apply.
+An empty category requires a reviewed explanation; every rule still needs a scenario.
 
-A **reviewer** independently assesses the final statements and scenarios. Review
-includes a cold-read test, applicability of failure/boundary coverage and a challenge
-to find materially different interpretations. Syntax results come from the controller,
-not reviewer JSON. Hard failures and unresolved decisions cannot be waived.
+## Review and handoff
 
-The operator then inspects the proposed handoff, chooses a local export profile,
-approves the exact plan and seals it. Download is a separate, read-only operation.
-The full ZIP contains private evidence; import only its `.feature` file into test
-management after validating the chosen Xray instance's settings.
+The draft shows narrative statements, their exact supporting quotations, Gherkin
+and a coverage table. Inspect the before/after comparison and quality findings.
+Syntax success alone does not mean that the requirement is correct.
 
-## Optional bounded model assistance
+Use a different reviewer identity and a fresh assistant conversation. The reviewer
+checks every statement and scenario, challenges ambiguity, and evaluates intent,
+precision, scope, dependencies and non-functional needs. Failed or incomplete checks
+return the requirement for revision. A writer's self-assessment is not an independent review.
 
-Model use is off by default. With an operator-managed Ollama instance on loopback,
-choose actual installed models explicitly:
+As operator, select Cucumber, Xray Cloud or Xray Server/DC and inspect the exact
+proposed files. Approve that handoff, then **Seal and get approved handoff** within
+15 minutes. A changed source, answer, policy or review requires fresh approval.
+Sealed exports remain immutable, and repeat downloads return the stored bundle.
 
-```sh
-python -m clarity.refine --state "$STATE" serve \
-  --model YOUR_LOCAL_AUTHOR_MODEL \
-  --review-model YOUR_LOCAL_REVIEW_MODEL
-```
+## Background model jobs
 
-The author action investigates selected evidence and either proposes targeted
-questions or submits a strict draft. Questions are stored atomically and the UI
-shows the next highest-impact decision. Existing unanswered questions stop further
-drafting calls instead of being repeatedly asked or silently guessed.
+Model work runs in a bounded background executor. Refresh the requirement to see
+queued, running, validating, completed, failed or interrupted status. You can cancel
+before result recording; an in-flight provider may still consume compute/tokens.
+Cancelled output is not applied. Once result recording starts, inspect the result
+instead. Closing the application never silently retries an interrupted job.
 
-The reviewer action uses a fresh prompt without the writer's self-score or an
-older review's verdict. Each response must match its contract. Model results
-cannot approve anything, alter policy, issue tools, or write to a tracker.
+Oversized or credential-like input fails before reserving a model attempt. Once an
+attempt is reserved, provider failure, timeout or cancellation still counts against
+the cycle budget. An operator may explicitly authorize another cycle with a reason.
 
-Calls are synchronous with bounded transport/input/output settings and a persistent
-attempt budget (six by default). Attempts are reserved before inference; failed or
-interrupted calls remain visible and are not automatically retried. Rewrites have
-a separate three-rewrite ceiling. Only an operator can authorize another cycle.
-The controller records model name and elapsed time, not private reasoning traces.
-
-A loopback URL does not guarantee that the backend performs local inference. Verify
-model deployment and data handling, including whether a chosen model is cloud-backed.
-The transport follows no redirects, uses no ambient HTTP proxies and has no arbitrary
-URL option. The current implementation has transport/contract tests, not live-model
-quality certification. No API key or model has been assumed on your behalf.
-
-Official transport reference: https://docs.ollama.com/api/chat
-
-## CLI and host-driven use
+For automation of this local workflow, the lower-level commands remain available:
 
 ```sh
-python -m clarity.refine --state "$STATE" capture \
-  --key-file "$KEYS/author.key" --id REQ-demo --project PERSONAL \
-  --brief-file /path/to/request.txt
-python -m clarity.refine --state "$STATE" status \
-  --key-file "$KEYS/author.key" --id REQ-demo
+python -m clarity.refine --help
+python -m clarity.refine --state /absolute/private/state status --key-file /absolute/author.key --id REQ1
 ```
 
-`action submit` and `action review` accept a strict JSON file with `--input` and
-require the current `--version`. Contracts are in `clarity/refine/contracts.py`;
-`examples/refinement-reference.json` is synthetic, not a template of approved facts.
-Do not copy its PASS judgments or source authority into real work.
-
-Other explicit actions cover asking/answering, source confirmation, question
-resolution, exact approval and new cycles. `plan` shows the bytes and hashes to
-be approved. `seal --approval <id> --output <new-path.zip>` seals and writes a local
-bundle; retrying with a new output path retrieves the same sealed content. Existing
-files are never overwritten. `verify` checks refinement record and export integrity.
-
-Project policy is set with the operator-only `policy --project ... --input ...`
-command. Draft submissions cannot include their own risk register or relax the
-quality checks. The original `.github/project-config.json` remains the v0.2/editor
-configuration; it is not silently treated as the trusted v0.3 policy store.
-
-## Evaluation and boundaries
-
-The parity corpus in `examples/refinement-parity.json` represents one business need
-from expert, partial and ordinary-language starting points, with the same supplied
-reference policy. It is an initial synthetic corpus awaiting human ratification.
-Provide actual final drafts and independent reviews keyed by case ID:
-
-```sh
-python -m clarity.refine.benchmark examples/refinement-parity.json /path/to/outputs.json
-```
-
-The report separates groups, includes missing outputs as failures and distinguishes
-contract results from semantic/model quality. Reusing a reference output only tests
-the contract; it is not evidence that a model can derive that output from each brief.
-Add human-labelled cases, repeated model trials and blind developer/tester reviews
-before claiming equal quality across user groups.
-
-The older snapshot CLI and exports remain available, but new refinement runs are
-stored separately and cannot be approved through the older API. The updated v2 backup
-envelope explicitly includes the additive tables; after restore, run refinement integrity checks
-as well as the legacy checks. Old credentials remain disabled by the existing
-restore procedure, so unused refinement approvals cannot be exercised with a new
-key. Backup encryption and automated retention are not implemented.
+Use [recovery](recovery.md), [troubleshooting](troubleshooting.md), and the
+[handoff standard](handoff-standard.md) when a step needs further detail.

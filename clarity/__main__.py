@@ -1,4 +1,4 @@
-"""Standalone Clarity CLI. No model calls or remote mutations."""
+"""Clarity local application and requirement-quality tools."""
 from __future__ import annotations
 
 import argparse
@@ -26,9 +26,13 @@ def main(argv: list[str] | None = None) -> int:
     log.add_argument("run_id")
     log.add_argument("--run-dir", type=Path, required=True)
     log.add_argument("--config", type=Path, default=Path(".github/project-config.json"))
+    from . import app_commands
+    app_commands.add(sub)
     add_commands(sub)
     args = parser.parse_args(argv)
     try:
+        if args.command in {'setup', 'start', 'doctor', 'mcp', 'backup', 'restore', 'source-bundle'}:
+            return app_commands.execute(args)
         if args.command in {"work", "lint", "import-markdown", "linear-read", "benchmark"}:
             return execute(args)
         if args.command == "validate-config":

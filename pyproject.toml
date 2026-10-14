@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools==84.0.0", "wheel==0.48.0", "packaging==26.3"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "clarity-requirements"
+version = "0.4.0"
+description = "Local requirement refinement with evidence, independent review and exact Gherkin handoffs"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = ["gherkin-official==42.0.1", "cryptography==50.0.2"]
+
+[project.scripts]
+clarity = "clarity.__main__:main"
+
+[tool.setuptools.packages.find]
+include = ["clarity*"]
+
+[tool.setuptools.package-data]
+clarity = ["assets/*.css", "assets/*.js", "resources/*"]
+
+[tool.setuptools.cmdclass]
+build_py = "build_support.BuildPy"
