@@ -1,73 +1,51 @@
-# Standalone architecture
+# Architecture
 
-Clarity's fixed output is an evidence-backed requirement with canonical Gherkin
-acceptance criteria. Input expertise changes the assistance, not the quality bar.
+The installed `clarity` CLI owns setup, diagnostics, encrypted backups and local
+startup. `clarity.refine.Controller` owns the requirement workflow. Server-rendered
+pages expose explicit role-specific actions; providers and assistants cannot approve.
 
-## Product path (v0.3)
+| Component | Responsibility |
+| --- | --- |
+| `storage.py` | Private POSIX SQLite transactions; read-only queries use deferred transactions |
+| `refine/controller.py` | Immutable source/decision/draft/review events, optimistic versions and exact approval/sealing |
+| `workspace.py` | Versioned source/model configuration and encrypted credential references |
+| `refine/web.py`, `refine/views.py`, `assets/` | Loopback HTTP boundary, CSRF/session handling and escaped accessible forms |
+| `host_bridge.py` | Scoped author/reviewer stdio MCP tools for existing coding assistants |
+| `jobs.py` | Two bounded background inference slots, durable status and cooperative cancellation |
+| `refine/worker.py`, `connections.py`, `local_model.py` | Explicit model/source transports, bounded packets and strict output validation |
+| `refine/checks.py`, `schemas.py` | Official Gherkin parsing, multiline outline checks, coverage, provenance and provider JSON schemas |
+| `backup.py`, `backup_crypto.py` | Consistent versioned snapshots and authenticated passphrase encryption |
+| `evaluation.py`, `handoff_check.py` | Grouped repeated trials and read-only Xray pilot receipt checks |
 
-`clarity.refine.Controller` owns raw briefs, selected evidence, source applicability,
-questions, confirmed answers, immutable drafts, independent reviews, exact approvals
-and sealed developer handoffs. `contracts.py` separates incomplete input from the
-complete output. `checks.py` validates source references, quotations, trusted policy,
-Gherkin syntax/compiler results, traceability and coverage. Semantic truth is still
-assessed independently; no heuristic claims to prove it.
+## Requirement lifecycle
 
-The controller adds `refine_meta`, `refine_runs`, `refine_records`, `refine_exports`
-to the existing private SQLite workspace through an explicit versioned bootstrap.
-It preserves the base schema and existing records. New runs are not visible to
-the legacy snapshot API, so a legacy approval cannot publish a new draft. Shared
-capabilities retain fixed author/reviewer/operator roles. Authors can access only
-their own briefs; reviewers/operators span this single trusted workspace.
+Capture can be incomplete. Only a reviewed complete revision can reach approval.
+Sources, decisions, policy and executable quality resources bind the current draft.
+Changed context invalidates old review/approval. Questions retain stable IDs;
+source replacement preserves earlier evidence in the audit history.
 
-Records are immutable and hash-chained; optimistic versions and immediate SQLite
-transactions prevent stale writes. External inference takes place outside database
-transactions. A model attempt is reserved before calling and never retried silently.
-Completed outputs are rejected if decisions/source versions changed while waiting.
+Inference preflight validates packet size and credential-like literals before
+reserving an attempt. The controller rechecks the context atomically. Provider
+output is applied only to the reserved version and context; cancellation is
+serialized with result recording. A restarted application marks active jobs
+interrupted and requires an explicit retry.
 
-## Reasoning and models
+Independent review is digest-bound and cannot come from the author identity.
+The operator's short-lived approval binds the exact handoff plan and file hashes.
+Sealing and repeat retrieval use the same immutable stored bundle. Export never
+performs remote publication or creates executable step definitions.
 
-The optional `worker.py` runner makes two explicit calls: evidence-based interviewing
-or drafting, then fresh independent review. It does not dispatch all ten role profiles.
-Drafting returns either bounded questions or a strict draft; review returns complete
-statement/scenario findings and semantic checks. Outputs cannot grant authority,
-change policy, choose tools, approve or publish. An operator chooses the model(s)
-and authorizes selected data for that deployment. A fresh reviewer context receives
-neither the writer's self-score nor a previous review score.
+## Storage and distribution
 
-The implemented transport targets Ollama on 127.0.0.1 only, without proxies,
-redirects or tool calls. Model names are explicit. Loopback does not guarantee
-local inference: verify cloud-backed-model settings and data handling. There are
-size/call/output budgets and socket timeouts, not an isolated inference sandbox.
-A crash leaves a visible reserved attempt; a human chooses whether to retry.
+The base database and additive refinement/configuration namespaces have explicit
+schema versions. Backups include all supported non-secret namespaces. Unknown or
+partial namespaces fail closed. Read transactions do not reserve the writer lock;
+no speculative cache is added for a small local workload.
 
-## Workbench
+Wheels contain the human quality contracts needed to compute the engine digest,
+so installed operation does not depend on a repository checkout. Canonical copies
+are included by `build_support.py`; changes to quality code/contracts invalidate
+old unsealed revisions. Assets load from the installed package without a CDN.
 
-`python -m clarity.refine --state ... serve` runs a local server-rendered UI.
-It supports plain-language input, selected-source capture, targeted questions,
-role-specific drafting/review/approval actions, evidence, diffs and coverage.
-No JavaScript, remote assets, credential-bearing model requests or administrative
-provisioning endpoint is supplied. Host/origin checks, CSRF tokens, strict forms,
-HttpOnly SameSite cookies, escaped content and no-store responses protect this
-loopback use case. Do not proxy it onto the internet.
-
-## Handoff and recovery
-
-The operator approves exact generated file hashes, source/context/review/engine
-versions and an explicit export profile. The Gherkin file is copied byte-for-byte
-from the approved draft. SQLite atomically records approval consumption and sealed
-files; repeated sealing retrieves the existing result. File retrieval is separate
-and retryable. No remote test creation or execution is implied.
-
-The backup API supports the old v1 envelope and a v2 envelope including refinement
-records. Restore uses a new private destination, validates hashes/chains and disables
-all old keys. Pending approvals require a new independent review/approval. Previously
-sealed exports remain historical evidence. Encryption and automatic pruning are absent.
-
-## Compatibility and boundaries
-
-The v0.2 controller, read-only Linear adapter and old helpers remain available.
-Their checklist artifacts are legacy exports, not v0.3 quality-approved handoffs.
-This is a standalone application, not a development-pipeline front end. No
-enterprise identity provider, public API, multi-tenant access control, guaranteed
-prompt-injection detection, source-system authority verification or live Xray
-publisher is implemented. Use human-reviewed evaluations before quality claims.
+The old `runtime.py` snapshot API remains for compatibility. Its checklist exports
+are separate from the current Gherkin handoff standard.

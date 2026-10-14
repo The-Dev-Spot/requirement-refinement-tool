@@ -8,7 +8,7 @@ from urllib.parse import urlsplit
 
 from .guardrails import ValidationError
 
-ALLOWED_HOSTS = {"example.com", "example.invalid", "github.com", "api.github.com", "docs.github.com", "modelcontextprotocol.io", "cheatsheetseries.owasp.org", "cucumber.io", "api.linear.app", "linear.app", "www.sqlite.org", "pypi.org", "127.0.0.1", "docs.ollama.com", "docs.getxray.app"}
+ALLOWED_HOSTS = {"example.com", "example.invalid", "github.com", "api.github.com", "docs.github.com", "modelcontextprotocol.io", "cheatsheetseries.owasp.org", "cucumber.io", "api.linear.app", "linear.app", "www.sqlite.org", "pypi.org", "127.0.0.1", "docs.ollama.com", "docs.getxray.app", "developer.atlassian.com", "developers.openai.com", "platform.claude.com", "code.claude.com", "code.visualstudio.com"}
 URL = re.compile(r"https?://[^\s<>\"')`]+")
 EMAIL = re.compile(r"\b[A-Z0-9._%+-]+@([A-Z0-9.-]+\.[A-Z]{2,})\b", re.I)
 SECRETS = (

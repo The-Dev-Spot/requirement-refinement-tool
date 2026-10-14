@@ -16,52 +16,72 @@ from ..guardrails import ValidationError, canonical
 from .contracts import require
 from .controller import Controller
 from .handoff import archive
-from .worker import decode, run_stage
+from .worker import decode, run_stage, request_packet
+from ..workspace import Workspace, initialize as initialize_settings
+from ..jobs import Jobs, RuntimeLease
+from .. import host_bridge
+from . import views
+from pathlib import Path
 
-CSS = """body{font:17px/1.6 system-ui,sans-serif;max-width:74rem;margin:2rem auto;padding:0 1.2rem;background:#f6f7f9;color:#16202b}h1,h2,h3{line-height:1.2}header,section{background:white;border:1px solid #d5dbe2;border-radius:.6rem;padding:1.2rem;margin:1rem 0}label{display:block;margin:.7rem 0}input,textarea,select,button{font:inherit;box-sizing:border-box;padding:.6rem;border:1px solid #8a97a6;border-radius:.25rem}input:not([type=hidden]),textarea{width:100%}textarea{min-height:7rem}button{margin:.6rem .5rem .4rem 0;cursor:pointer;background:#163e5c;color:white}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#eef1f5;padding:1rem}small{display:block;color:#435466}a{color:#164d75}details{margin:1rem 0}table{border-collapse:collapse;width:100%}td,th{border-bottom:1px solid #ccd3dc;padding:.5rem;text-align:left;vertical-align:top}.warning{border-left:5px solid #aa6900}.error{border-left:5px solid #a32424}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,28rem),1fr));gap:1rem}code{overflow-wrap:anywhere}"""
-
-
-def esc(value):
-    return html.escape(str(value), quote=True)
-
-
-def field(name, label, value='', textarea=False, kind='text'):
-    if textarea:
-        control = '<textarea name="' + name + '" required>' + esc(value) + '</textarea>'
-    else:
-        control = '<input type="' + kind + '" name="' + name + '" value="' + esc(value) + '" required>'
-    return '<label>' + esc(label) + control + '</label>'
+from .views import esc, field, form, page
 
 
-def form(action, csrf, content, button, hidden=None):
-    values = {'csrf': csrf, **(hidden or {})}
-    controls = ''.join('<input type="hidden" name="' + esc(k) + '" value="' + esc(v) + '">' for k, v in values.items())
-    return '<form method="post" action="' + esc(action) + '">' + controls + content + '<button type="submit">' + esc(button) + '</button></form>'
+def boolean(value):
+    require(value in {'true', 'false'}, 'Invalid switch')
+    return value == 'true'
 
 
-def page(title, body):
-    return '<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>' + esc(title) + '</title><style>' + CSS + '</style><body><header><a href="/">Clarity</a><h1>' + esc(title) + '</h1><p>Flexible input. One developer-ready quality standard. Gherkin acceptance criteria.</p></header><main>' + body + '</main></body></html>'
-
-
-def render_status(status, csrf, model_enabled, planned=None, plan_error=None):
+def render_status(status, csrf, model_enabled, planned=None, plan_error=None, *, models=(), sources=(), jobs=(), root=None):
     run = status['run']; role = status['actor']['role']; rid = run['id']
     path = '/run/' + rid + '/'
     base = {'version': run['version']}
     make = lambda action, content, label, hidden=None: form(path + action, csrf, content, label, {**base, **(hidden or {})})
-    body = '<section><h2>' + esc(run['state'].replace('_', ' ').title()) + '</h2><p>Revision ' + str(run['revision']) + '; version ' + str(run['version']) + '. Signed in as ' + esc(status['actor']['name']) + ' (' + esc(role) + ').</p>'
+    stages = ['Capture', 'Decisions', 'Draft', 'Review', 'Approve', 'Handoff']
+    current = {'captured': 0, 'awaiting_decision': 1, 'awaiting_revision': 2, 'awaiting_review': 3, 'awaiting_approval': 4, 'approved': 4, 'exported': 5}.get(run['state'], 0)
+    body = '<a href="/">← All requirements</a><ol class="stepper" aria-label="Refinement progress">' + ''.join('<li class="' + ('done' if i < current else 'current' if i == current else '') + '"><b>' + str(i + 1) + '</b>' + label + '</li>' for i, label in enumerate(stages)) + '</ol>'
+    body += '<section><div class="eyebrow">' + esc(run['project']) + ' · ' + esc(rid) + '</div><h2>' + esc(run['state'].replace('_', ' ').title()) + '</h2><p>Revision ' + str(run['revision']) + '; version ' + str(run['version']) + '. Signed in as ' + esc(status['actor']['name']) + ' (' + esc(role) + ').</p>'
     body += '<h3>Original request</h3><p>' + esc(run['brief']) + '</p>'
     if status['stale']:
         body += '<p class="error">Evidence, decisions or policy changed. A fresh draft and independent review are required.</p>'
+        affected = [v['id'] for v in (status['draft'] or {}).get('statements', []) if any(c['source_id'] not in status['context']['sources'] or status['context']['sources'][c['source_id']]['digest'] != c['source_digest'] for c in v['citations'])]
+        if affected: body += '<p>Changed source citations affect: ' + esc(', '.join(affected)) + '.</p>'
     if model_enabled and role in {'author', 'reviewer'} and run['state'] not in {'exported', 'rejected'}:
         stage = 'draft' if role == 'author' else 'review'
         if not (stage == 'draft' and status['open_questions']):
             body += make('model', '<small>Explicitly run the configured model using only this brief’s selected evidence. No approval or tracker write is granted.</small>', 'Refine this request' if stage == 'draft' else 'Run independent model review', {'stage': stage})
-    elif not model_enabled:
-        body += '<small>Model assistance is disabled. An authorized analyst can import a draft or review; model and live Xray validation are separate acceptance steps.</small>'
+    elif not model_enabled and role in {'author', 'reviewer'}:
+        body += '<p class="notice">Use your coding assistant below, or select a saved local model. <a href="/settings">Manage setup</a></p>'
+    if role in {'author', 'reviewer'}:
+        try:
+            size = len(canonical(request_packet(status, 'draft' if role == 'author' else 'review')).encode())
+            body += '<small>Selected model packet: ' + str(size) + ' / 200000 bytes. Reserved calls this cycle: ' + str(run['calls']) + '.</small>'
+        except ValidationError: pass
     body += '</section>'
+    if role in {'author', 'reviewer'}:
+        stage = 'draft' if role == 'author' else 'review'
+        body += views.assistant_panel(status, csrf, root)
+        available = [m for m in models if m['enabled'] and m['provider'] != 'host-assistant']
+        if available:
+            body += '<section><h2>Run a saved model</h2>' + make('model-profile', views.select('profile', 'Model connection', [(m['id'], m['id'] + ' · ' + m['model']) for m in available]), 'Draft with selected model' if stage == 'draft' else 'Run independent review', {'stage': stage}) + '<small>Only this requirement’s selected evidence is sent. Jobs run in the background and are never retried automatically.</small></section>'
+    if jobs:
+        body += '<section aria-live="polite"><div class="row"><h2>Model activity</h2><a href="/run/' + esc(rid) + '">Refresh status</a></div>'
+        for job in jobs:
+            body += '<p><span class="chip gray">' + esc(job['status']) + '</span> ' + esc(job['stage']) + ' · ' + esc(job['message']) + '</p>'
+            if job['status'] in {'queued', 'running', 'cancel_requested'} and (job['actor'] == status['actor']['name'] or role == 'operator'):
+                body += form('/jobs/cancel', csrf, '', 'Cancel this job', {'id': job['id'], 'run_id': rid})
+        body += '</section>'
+    if status.get('model_calls'):
+        body += '<section><details><summary>Recorded inference measurements</summary><p>Reserved calls this cycle: ' + str(run['calls']) + ' / ' + str(status['context']['policy']['policy']['max_model_calls']) + '.</p>'
+        for call in status['model_calls']:
+            metrics = call.get('metrics', {})
+            body += '<p><strong>' + esc(call.get('provider', 'model') + ' · ' + call['model']) + '</strong> · ' + str(call['elapsed_seconds']) + ' seconds · ' + ('result recorded' if call['succeeded'] else 'attempt failed or cancelled') + '</p>'
+            if 'load_duration' in metrics: body += '<small>Model loading: %.3f seconds.</small>' % (metrics['load_duration'] / 1e9)
+            if 'provider_milliseconds' in metrics: body += '<small>Provider request: %.3f seconds; validation/recording: %.3f seconds.</small>' % (metrics['provider_milliseconds'] / 1000, metrics.get('validation_milliseconds', 0) / 1000)
+            body += '<pre>' + esc(canonical(metrics)) + '</pre>'
+        body += '<small>Usage is reported by the selected provider when available. No semantic confidence or price is inferred.</small></details></section>'
     if status['next_question']:
         q = status['next_question']
-        body += '<section class="warning"><h2>Next decision</h2><h3>' + esc(q['text']) + '</h3><p>' + esc(q['why']) + '</p>'
+        body += '<section class="decision"><span class="eyebrow">One decision at a time</span><h2>Next decision</h2><h3>' + esc(q['text']) + '</h3><p>' + esc(q['why']) + '</p>'
         if role == 'operator':
             body += make('answer', field('answer', 'Confirmed business answer', textarea=True), 'Record owner decision', {'question_id': q['id']})
         else:
@@ -69,16 +89,21 @@ def render_status(status, csrf, model_enabled, planned=None, plan_error=None):
         body += '</section>'
     if status['draft']:
         value = status['draft']
+        body += views.example_map(value, status['checks'].get('scenario_index'), status['open_questions'])
         body += '<section><h2>' + esc(value['title']) + '</h2>'
         for statement in value['statements']:
-            body += '<h3>' + esc(statement['kind'].title() + ' · ' + statement['id']) + '</h3><p>' + esc(statement['text']) + '</p><small>Sources: ' + esc(', '.join(c['source_id'] for c in statement['citations'])) + '</small>'
-        body += '<h3>Canonical acceptance criteria</h3><pre>' + esc(value['feature']) + '</pre><h3>Coverage and traceability</h3><pre>' + esc(canonical(value['coverage'])) + '</pre></section>'
+            body += '<h3>' + esc(statement['kind'].title() + ' · ' + statement['id']) + '</h3><p>' + esc(statement['text']) + '</p><details><summary>Evidence supporting this statement</summary>'
+            for citation in statement['citations']:
+                body += '<small>' + esc(citation['source_id']) + ' · ' + esc(citation['source_digest'][:12]) + '</small><blockquote>' + esc(citation['quote']) + '</blockquote>'
+            body += '</details>'
+        body += '<h3>Canonical acceptance criteria</h3><pre>' + esc(value['feature']) + '</pre><h3>Coverage and traceability</h3>' + views.coverage_table(value['coverage']) + '</section>'
         rewritten = '\n'.join(s['text'] for s in value['statements']) + '\n\n' + value['feature']
         delta = '\n'.join(difflib.unified_diff(run['brief'].splitlines(), rewritten.splitlines(), fromfile='original request', tofile='current handoff draft', lineterm=''))
         body += '<section><details><summary>Request-to-handoff text changes</summary><small>Text comparison, not an automated judgment that every change is justified. Inspect citations and independent review.</small><pre>' + esc(delta) + '</pre></details></section>'
         body += '<section><h2>Quality findings</h2><p>' + esc(status['review']['quality']['verdict'] if status['review'] else 'Independent review pending') + '</p>'
         for f in status['checks']['findings']:
             body += '<p><strong>' + esc(f['severity'] + ' · ' + f['code']) + '</strong>: ' + esc(f['message']) + ' <code>' + esc(f['scope']) + '</code></p>'
+            body += '<small>' + esc(views.finding_action(f['code'])) + '</small>'
             if f['severity'] == 'security' and role == 'operator':
                 body += make('signal', field('reason', 'Why this exact wording is benign', textarea=True), 'Record signal disposition and require re-review', {'finding_id': f['id']})
         if status['review']:
@@ -91,6 +116,10 @@ def render_status(status, csrf, model_enabled, planned=None, plan_error=None):
             body += make('confirm-source', field('reason', 'Why this source is authoritative and applies here', textarea=True), 'Confirm source applicability', {'source_id': source['id'], 'source_digest': source['digest']})
         body += '</details>'
     if role == 'author':
+        available_sources = [source for source in sources if source['project'] == run['project']]
+        if available_sources:
+            old = [('','Keep all current sources')] + [(v['id'], 'Replace ' + v['id']) for v in status['context']['sources'].values() if v['kind'] == 'reference']
+            body += '<details><summary>Attach a source from the library</summary>' + make('attach', views.select('source_id', 'Selected source version', [(v['id'] + '|' + str(v['version']), v['title'] + ' · version ' + str(v['version'])) for v in available_sources]) + views.select('supersedes', 'Source change', old), 'Attach selected version') + '<small>Replacing a reference preserves its history and requires a fresh draft, authority confirmation and independent review.</small></details>'
         body += '<details><summary>Add a reference</summary>' + make('source', field('source_id', 'New source/revision ID') + field('title', 'Reference title') + field('locator', 'Source locator') + field('text', 'Paste the relevant source text', textarea=True), 'Capture reference for authority review') + '</details>'
     body += '</section>'
     if role in {'author', 'reviewer'}:
@@ -113,18 +142,32 @@ def render_status(status, csrf, model_enabled, planned=None, plan_error=None):
         body += '<details><summary>Authorize another refinement cycle</summary>' + make('cycle', field('reason', 'Reason for a new budgeted cycle', textarea=True), 'Authorize another cycle') + '</details>'
         body += '<details><summary>Resolve duplicate or out-of-scope questions</summary>' + make('resolve-question', field('question_id', 'Open question ID') + '<label>Resolution<select name="resolution"><option>merged</option><option>out_of_scope</option></select></label>' + '<label>Merge target (blank when out of scope)<input name="target"></label>' + field('reason', 'Confirmed scope decision or merge rationale', textarea=True), 'Record explicit question resolution') + '</details></section>'
     body += '<section><details><summary>Durable audit trail</summary><pre>' + esc(canonical(status['events'])) + '</pre></details></section>'
-    return page('Requirement workspace', body)
+    return page('Requirement workspace', body, 'Resolve the decisions. Trace the evidence. Review the exact handoff.')
 
 
 class Workbench(ThreadingHTTPServer):
     daemon_threads = True
     def __init__(self, root, port=8765, author_provider=None, reviewer_provider=None):
-        self.controller = Controller(root)
-        self.providers = {'draft': author_provider, 'review': reviewer_provider}
-        self.sessions = {}
-        self.session_lock = threading.Lock()
-        super().__init__(('127.0.0.1', port), Handler)
-        self.origin = 'http://127.0.0.1:' + str(self.server_port)
+        self.lease = RuntimeLease(root)
+        self.jobs = None
+        try:
+            super().__init__(('127.0.0.1', port), Handler)
+            initialize_settings(root)
+            self.controller = Controller(root)
+            self.workspace = Workspace(root)
+            self.jobs = Jobs(root)
+            self.providers = {'draft': author_provider, 'review': reviewer_provider}
+            self.sessions = {}
+            self.session_lock = threading.Lock()
+            self.origin = 'http://127.0.0.1:' + str(self.server_port)
+        except BaseException:
+            self.server_close()
+            raise
+
+    def server_close(self):
+        if hasattr(self, 'socket'): super().server_close()
+        if self.jobs: self.jobs.close()
+        self.lease.close()
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -163,7 +206,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_response(code)
         # A global no-referrer policy makes browser form POSTs send Origin: null.
         # Preserve same-origin form headers while suppressing external referrers.
-        for key, value in {'Content-Type': content_type, 'Content-Length': str(len(encoded)), 'Cache-Control': 'no-store', 'Referrer-Policy': 'same-origin', 'X-Content-Type-Options': 'nosniff', 'X-Frame-Options': 'DENY', 'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'"}.items():
+        for key, value in {'Content-Type': content_type, 'Content-Length': str(len(encoded)), 'Cache-Control': 'no-store', 'Referrer-Policy': 'same-origin', 'X-Content-Type-Options': 'nosniff', 'X-Frame-Options': 'DENY', 'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'; script-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'"}.items():
             self.send_header(key, value)
         if self.new_cookie:
             self.send_header('Set-Cookie', 'clarity_session=' + self.new_cookie + '; HttpOnly; SameSite=Strict; Path=/; Max-Age=3600')
@@ -187,17 +230,35 @@ class Handler(BaseHTTPRequestHandler):
         try:
             self.guard(); _, session = self.session()
             parts = urlsplit(self.path); path = parts.path
+            if path == '/assets/workbench.js':
+                return self.respond(200, (Path(__file__).parents[1] / 'assets/workbench.js').read_bytes(), 'text/javascript; charset=utf-8')
             token = session['token']
             if not token:
-                body = '<section><h2>Sign in to this local workspace</h2>' + form('/login', session['csrf'], field('token', 'Workspace login key', kind='password'), 'Sign in') + '<small>Paste the contents of your author.key, reviewer.key or operator.key file created during setup. This key selects your workspace role.</small><small>Keys are never placed in browser storage or URLs. This is a trusted local workspace, not a hosted multi-tenant service.</small></section>'
+                body = '<section class="login"><span class="eyebrow">Welcome to Clarity</span><h2>Sign in to this local workspace</h2><p>Use the login key for the role you need today.</p>' + form('/login', session['csrf'], field('token', 'Workspace login key', kind='password'), 'Sign in') + '<small>Paste the contents of your author.key, reviewer.key or operator.key file created during setup. This key selects your workspace role.</small><p><strong>Author</strong> captures and drafts. <strong>Reviewer</strong> independently checks. <strong>Operator</strong> configures, answers and approves.</p><small>Run <code>clarity setup</code> first if you do not have these files. Keys stay out of URLs and browser storage.</small></section>'
                 return self.respond(200, page('Welcome', body))
             if path == '/':
                 runs = self.server.controller.list_runs(token)
-                body = '<section><h2>Requirements</h2>' + ''.join('<p><a href="/run/' + esc(r['id']) + '">' + esc(r['id']) + '</a> · ' + esc(r['state']) + '</p>' for r in runs) + '</section>'
-                body += '<section><h2>Start with the problem</h2>' + form('/create', session['csrf'], field('id', 'Brief ID') + field('project', 'Project ID', 'PERSONAL') + field('brief', 'What needs to change, and why?', textarea=True) + '<label>Conversation style<select name="presentation"><option value="guided">Plain-language guidance</option><option value="concise">Concise analyst guidance</option></select></label>', 'Capture request') + '<small>Creating a brief requires an author capability. The same handoff standard applies to both conversation styles.</small></section>'
-                body += form('/logout', session['csrf'], '', 'Sign out')
-                return self.respond(200, page('Requirements', body))
+                return self.respond(200, views.dashboard(runs, self.server.workspace.actor(token), session['csrf']))
+            w = self.server.workspace
+            actor = w.actor(token)
+            if path == '/settings':
+                models = w.records(token, 'model')
+                versions = {m['id']: m['version'] for m in models}
+                checks = [c for c in w.records(token, 'check') if versions.get(c['connection']) == c['connection_version']]
+                return self.respond(200, views.settings(actor, session['csrf'], models, w.records(token, 'connection'), checks))
+            if path == '/sources': return self.respond(200, views.sources(actor, session['csrf'], w.records(token, 'source'), w.records(token, 'connection')))
+            if path == '/help': return self.respond(200, views.help_page())
+            if path == '/projects':
+                from ..storage import transaction
+                from .controller import _policy, _records
+                with transaction(self.server.controller.root, write=False) as db:
+                    projects = {r[0] for r in db.execute('SELECT DISTINCT project FROM refine_runs')} | {r['data']['project'] for r in _records(db, None, 'policy')} | {'PERSONAL'}
+                    policies = {p: _policy(db, p) for p in sorted(projects)}
+                return self.respond(200, views.projects(actor, session['csrf'], policies))
             bits = path.strip('/').split('/')
+            if len(bits) == 3 and bits[0] == 'run' and bits[2] == 'task.json':
+                task = host_bridge.packet(self.server.controller, token, bits[1])
+                return self.respond(200, canonical(task) + '\n', 'application/json', download=bits[1] + '-task.json')
             if len(bits) == 2 and bits[0] == 'run':
                 status = self.server.controller.status(token, bits[1])
                 profile = parse_qs(parts.query).get('profile', ['cucumber'])[0]
@@ -208,7 +269,7 @@ class Handler(BaseHTTPRequestHandler):
                     except ValidationError as exc:
                         error = str(exc)
                 stage = 'draft' if status['actor']['role'] == 'author' else 'review'
-                return self.respond(200, render_status(status, session['csrf'], self.server.providers[stage] is not None, planned, error))
+                return self.respond(200, render_status(status, session['csrf'], self.server.providers[stage] is not None, planned, error, models=w.records(token, 'model'), sources=w.records(token, 'source'), jobs=self.server.jobs.list(token, bits[1]), root=self.server.controller.root))
             if len(bits) == 3 and bits[0] == 'export':
                 bundle = self.server.controller.exported(token, bits[1], int(bits[2]))
                 return self.respond(200, archive(bundle), 'application/zip', download=bits[1] + '-handoff.zip')
@@ -244,16 +305,53 @@ class Handler(BaseHTTPRequestHandler):
             c = self.server.controller
             if path == '/create':
                 require(set(data) == {'id', 'project', 'brief', 'presentation'}, 'Invalid capture fields')
-                c.create(token, data['id'], data['project'], data['brief'], data['presentation'])
-                return self.respond(303, '', location='/run/' + data['id'])
+                rid = data['id'] or 'REQ-' + secrets.token_hex(5)
+                c.create(token, rid, data['project'], data['brief'], data['presentation'])
+                return self.respond(303, '', location='/run/' + rid)
+            w = self.server.workspace
+            if path in {'/settings/model', '/settings/connection'}:
+                kind = path.rsplit('/', 1)[1]; object_id = data.pop('id'); version = int(data.pop('version')); credential = data.pop('credential')
+                clear_credential = boolean(data.pop('clear_credential', 'false'))
+                data['enabled'] = boolean(data['enabled'])
+                if kind == 'model':
+                    data['allow_cloud'] = boolean(data['allow_cloud'])
+                    for name in ('port', 'max_tokens', 'timeout', 'keep_alive'): data[name] = int(data[name])
+                w.save(token, kind, object_id, version, data, credential, clear_credential)
+                return self.respond(303, '', location='/settings')
+            if path == '/settings/probe':
+                require(set(data) == {'id', 'version'}, 'Invalid diagnostic fields')
+                w.probe(token, data['id'], int(data['version']))
+                return self.respond(303, '', location='/settings')
+            if path == '/sources/save':
+                object_id = data.pop('id') or 'SRC-' + secrets.token_hex(6); version = int(data.pop('version'))
+                data['retrieved_at'] = time.time()
+                w.save(token, 'source', object_id, version, data)
+                return self.respond(303, '', location='/sources')
+            if path == '/sources/import':
+                require(set(data) == {'connection', 'item', 'project'}, 'Invalid source import fields')
+                w.import_source(token, data['connection'], data['item'], data['project'])
+                return self.respond(303, '', location='/sources')
+            if path == '/projects/save':
+                require(set(data) == {'project', 'record', 'risk_ids', 'canonical_steps', 'max_rewrites', 'max_model_calls'}, 'Invalid policy fields')
+                c.set_policy(token, data['project'], {'version': 1, 'risk_ids': [v.strip() for v in data['risk_ids'].splitlines() if v.strip()], 'canonical_steps': [v.strip() for v in data['canonical_steps'].splitlines() if v.strip()], 'max_rewrites': int(data['max_rewrites']), 'max_model_calls': int(data['max_model_calls'])}, int(data['record']))
+                return self.respond(303, '', location='/projects')
+            if path == '/jobs/cancel':
+                require(set(data) == {'id', 'run_id'}, 'Invalid cancellation fields')
+                c.status(token, data['run_id'])
+                self.server.jobs.cancel(token, data['id'])
+                return self.respond(303, '', location='/run/' + data['run_id'])
             bits = path.strip('/').split('/')
             require(len(bits) == 3 and bits[0] == 'run', 'Unknown action')
             rid, action = bits[1:]; version = int(data.pop('version'))
             # Never dynamically resolve a function name from untrusted input.
-            allowed = {'answer': {'question_id', 'answer'}, 'source': {'source_id', 'title', 'text', 'locator'}, 'confirm-source': {'source_id', 'source_digest', 'reason'}, 'submit': {'json'}, 'review': {'json'}, 'model': {'stage'}, 'ask': {'question_id', 'text', 'why', 'impact'}, 'signal': {'finding_id', 'reason'}, 'cycle': {'reason'}, 'approve': {'profile', 'plan_digest'}, 'seal': {'approval_id'}, 'resolve-question': {'question_id', 'resolution', 'target', 'reason'}}
+            allowed = {'answer': {'question_id', 'answer'}, 'source': {'source_id', 'title', 'text', 'locator'}, 'attach': {'source_id', 'supersedes'}, 'confirm-source': {'source_id', 'source_digest', 'reason'}, 'submit': {'json'}, 'assistant': {'json', 'context_digest'}, 'review': {'json'}, 'model': {'stage'}, 'model-profile': {'stage', 'profile'}, 'ask': {'question_id', 'text', 'why', 'impact'}, 'signal': {'finding_id', 'reason'}, 'cycle': {'reason'}, 'approve': {'profile', 'plan_digest'}, 'seal': {'approval_id'}, 'resolve-question': {'question_id', 'resolution', 'target', 'reason'}}
             require(action in allowed and set(data) == allowed[action], 'Invalid action fields')
             if action == 'answer': c.answer(token, rid, version, data['question_id'], data['answer'])
             elif action == 'source': c.add_source(token, rid, version, data['source_id'], data['title'], data['text'], data['locator'])
+            elif action == 'attach':
+                source_id, source_version = data['source_id'].split('|')
+                w.attach(token, rid, version, source_id, data['supersedes'], int(source_version))
+            elif action == 'assistant': host_bridge.submit(c, token, rid, version, data['context_digest'], decode(data['json']))
             elif action == 'confirm-source': c.confirm_source(token, rid, version, data['source_id'], data['source_digest'], data['reason'])
             elif action == 'submit': c.submit(token, rid, version, decode(data['json']))
             elif action == 'review': c.review(token, rid, version, decode(data['json']))
@@ -262,10 +360,10 @@ class Handler(BaseHTTPRequestHandler):
             elif action == 'cycle': c.new_cycle(token, rid, version, data['reason'])
             elif action == 'resolve-question': c.resolve_question(token, rid, version, data['question_id'], data['resolution'], data['target'] or None, data['reason'])
             elif action == 'approve': c.approve(token, rid, version, data['plan_digest'], data['profile'])
-            elif action == 'model':
-                provider = self.server.providers.get(data['stage'])
+            elif action in {'model', 'model-profile'}:
+                provider = w.provider(token, data['profile']) if action == 'model-profile' else self.server.providers.get(data['stage'])
                 require(provider is not None, 'This model stage is not configured')
-                run_stage(c, token, rid, version, data['stage'], provider)
+                self.server.jobs.start(token, rid, version, data['stage'], provider)
             elif action == 'seal':
                 # Seal itself rechecks the exact immutable approval and current state.
                 c.seal(token, rid, int(data['approval_id']))

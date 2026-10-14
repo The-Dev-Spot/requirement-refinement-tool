@@ -1,26 +1,32 @@
 # Contributing
 
-Keep changes scoped, evidence-backed and reviewable. Preserve the cold-read test,
-intake/review parity, explicit approval and the distinction between fact,
-inference and proposal. Do not replace a failed check with a weaker prompt.
+Read [AGENTS.md](AGENTS.md) for the quality and authority contract. Prefer small,
+reviewable changes that improve the final requirement rather than its self-score.
 
-Before proposing a change:
+Use Python 3.11+ on a POSIX system. Create a virtual environment, install the
+hash-locked runtime requirements, then `python -m pip install --no-deps -e .`.
 
 ```sh
-python -m pip install --require-hashes --only-binary=:all: -r requirements.lock
-python -m clarity validate-config
 python -m unittest discover -s tests -v
+python -m clarity validate-config
+python -m clarity lint examples/checklist-requirement.json
 python -m clarity benchmark examples/rule-benchmark.json
-git add <reviewed-files>
+python -m clarity gate examples/complete-report.json
 python -m clarity check-repo
+python -m pip wheel --no-deps .
 ```
 
-The hygiene command scans tracked working-tree files; stage new files first.
-Inspect the staged diff as well. Add negative tests for every policy change.
-Never use private source material as fixtures. Document capabilities accurately:
-planned features must not be presented as implemented or end-to-end tested.
+Stage new source files before the tracked-file scan. Check the resulting wheel
+outside the checkout: setup, doctor and loopback startup must work without the
+repository's documentation paths. Follow the separate browser-test instructions
+for real-browser verification. Use the quality corpus for model/prompt changes;
+fixtures cannot establish semantic quality.
 
-Governance, rubric, approval, CI and learning-policy changes need explicit human
-review. Branch protection and CODEOWNERS enforcement must be configured by an
-administrator; their presence must not be assumed. Do not add an open-source
-licence or change repository visibility without the owner's explicit decision.
+Keep examples fictional and use reserved example domains. Do not commit keys,
+private state, live source data, logs or local MCP client settings. Update relevant
+guides and runtime contracts when behavior changes. Run meaningful regression tests
+for authority, stale context, output validation and recovery boundaries.
+
+No merge, public deployment, remote tracker write or automatic retention deletion
+is part of a local implementation change. Record actual validation and any remaining
+live-model/client qualification in the PR.

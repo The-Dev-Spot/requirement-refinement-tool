@@ -69,6 +69,29 @@ class BrowserWorkbenchTests(Fixture):
         self.assertEqual(self.posts[-1], ('/logout', self.server.origin))
         self.assertEqual(self.page.get_by_role('heading', name='Sign in to this local workspace').count(), 1)
 
+    def test_browser_setup_source_file_and_responsive_layout(self):
+        self.page.goto(self.server.origin)
+        self.page.locator('input[name=token]').fill(self.o)
+        self.submit('/login', 'Sign in')
+        self.page.get_by_role('link', name='Setup', exact=True).click()
+        editor = self.page.locator('form[action="/settings/model"]')
+        editor.locator('input[name=id]').fill('LOCAL')
+        editor.locator('select[name=provider]').select_option('ollama')
+        editor.locator('input[name=model]').fill('synthetic-local-model')
+        self.submit('/settings/model', 'Save model profile')
+        self.assertEqual(self.page.get_by_text('LOCAL · ollama · synthetic-local-model', exact=True).count(), 1)
+        self.page.get_by_role('link', name='Sources', exact=True).click()
+        self.page.locator('input[name=title]').fill('Synthetic policy')
+        self.page.locator('input[name=locator]').fill('local:synthetic')
+        self.page.locator('input[type=file]').set_input_files({'name': 'policy.txt', 'mimeType': 'text/plain', 'buffer': b'Only the owner can cancel a booking.'})
+        self.page.wait_for_function("document.querySelector('textarea[name=text]').value.includes('Only the owner')")
+        self.submit('/sources/save', 'Save source version')
+        self.assertEqual(self.page.get_by_text('Synthetic policy', exact=True).count(), 1)
+        self.page.set_viewport_size({'width': 390, 'height': 844})
+        self.page.goto(self.server.origin + '/help')
+        self.assertTrue(self.page.evaluate('document.documentElement.scrollWidth <= window.innerWidth'))
+        self.assertNotIn(self.o, self.page.content())
+
     def test_navigation_to_another_origin_does_not_send_referrer(self):
         observed = []
 

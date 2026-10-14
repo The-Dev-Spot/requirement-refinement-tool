@@ -32,3 +32,6 @@ Thumbs.db
 *.key
 *.backup.json
 *.review.html
+build/
+dist/
+*.egg-info/

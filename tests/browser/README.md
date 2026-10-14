@@ -1,6 +1,6 @@
 # Workbench browser regression
 
-These tests submit the rendered login, capture and logout forms in Chromium.
+These tests submit rendered login, capture, model setup, source-file and logout forms in Chromium, and check a narrow responsive viewport.
 They do not set Origin or other browser-generated request headers manually.
 The fixture uses a disposable loopback workspace and synthetic keys; no model,
 external tracker, real credentials or existing workspace is used.

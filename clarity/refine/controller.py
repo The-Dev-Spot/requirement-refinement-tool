@@ -49,15 +49,17 @@ def _schema(db):
 
 
 def engine_digest() -> str:
-    directory = Path(__file__).parent
-    # Bind executable helpers, prompt/UI modules and the human-readable quality
-    # contract. This list is application policy, never supplied by the model.
-    root = directory.parents[1]
-    paths = list(directory.glob('*.py')) + [root / name for name in (
-        'clarity/guardrails.py', 'clarity/audit.py', 'requirements.lock',
-        'AGENTS.md', 'docs/handoff-standard.md', '.github/agents/runtime-doc-contract.json')]
+    package = Path(__file__).parents[1]
+    root = package.parent
+    resources = {'AGENTS.md': 'AGENTS.md', 'handoff-standard.md': 'docs/handoff-standard.md',
+                 'runtime-doc-contract.json': '.github/agents/runtime-doc-contract.json', 'requirements.lock': 'requirements.lock'}
     try:
-        return digest({str(p.relative_to(root)): hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(paths)})
+        hashes = {str(p.relative_to(package)): hashlib.sha256(p.read_bytes()).hexdigest()
+                  for p in sorted(package.rglob('*.py')) if 'resources' not in p.relative_to(package).parts}
+        for name, source in resources.items():
+            path = root / source if (root / 'pyproject.toml').is_file() else package / 'resources' / name
+            hashes['contract/' + name] = hashlib.sha256(path.read_bytes()).hexdigest()
+        return digest(hashes)
     except OSError as exc:
         raise ValidationError('A required quality-policy resource is missing') from exc
 
@@ -124,6 +126,8 @@ def _context(db, run):
             source = sources[value['source_id']]
             require(source['digest'] == value['source_digest'], "Reference authority is stale")
             sources[source['id']] = source_record(source['id'], source['title'], source['text'], source['locator'], 'reference', 'operator:' + r['actor'] + ':decision:' + str(r['seq']))
+        elif r['kind'] == 'source_superseded':
+            sources.pop(value['old_id'], None)
         elif r['kind'] == 'question':
             questions[value['id']] = {**value, 'state': 'open'}
         elif r['kind'] == 'answer':
@@ -193,10 +197,11 @@ class Controller:
             _record(db, run_id, who, 'captured', {'brief_digest': digest(brief), 'presentation': presentation})
         return self.status(token, run_id)
 
-    def set_policy(self, token, project, value):
+    def set_policy(self, token, project, value, expected_record=None):
         identifier(project); value = policy(value)
         with transaction(self.root) as db:
             _schema(db); who = authenticate(db, token, {'operator'})
+            require(expected_record is None or _policy(db, project)['record'] == expected_record, 'Project policy changed; refresh before saving')
             return _record(db, None, who, 'policy', {'project': project, 'policy': value, 'operator': who['actor']})
 
     def add_source(self, token, run_id, expected, source_id, title, body, locator):
@@ -219,10 +224,24 @@ class Controller:
             _touch(db, run, 'awaiting_revision')
         return self.status(token, run_id)
 
+    def replace_source(self, token, run_id, expected, old_id, source_id, title, body, locator):
+        value = source_record(source_id, title, body, locator, 'reference', None)
+        with transaction(self.root) as db:
+            who, run = _access(db, token, run_id, expected, {'author'})
+            context = _context(db, run)
+            require(old_id in context['sources'] and context['sources'][old_id]['kind'] == 'reference', 'Select a current reference to replace')
+            require(source_id not in context['sources'] and not source_id.startswith('DEC-'), 'Use a new source revision ID')
+            selected = [s for k, s in context['sources'].items() if k != old_id]
+            require(sum(len(s['text'].encode()) for s in selected) + len(body.encode()) <= 300000, 'Selected source budget exceeded')
+            _record(db, run_id, who, 'source', value)
+            _record(db, run_id, who, 'source_superseded', {'old_id': old_id, 'new_id': source_id})
+            _touch(db, run, 'awaiting_revision')
+        return self.status(token, run_id)
+
     def ask(self, token, run_id, expected, value):
         return self.ask_many(token, run_id, expected, [value])
 
-    def ask_many(self, token, run_id, expected, values):
+    def ask_many(self, token, run_id, expected, values, expected_context=None):
         require(isinstance(values, list) and 1 <= len(values) <= 5, "Ask between one and five targeted questions per batch")
         for value in values:
             fields(value, {'id', 'text', 'why', 'impact'}, 'question')
@@ -230,7 +249,9 @@ class Controller:
             require(type(value['impact']) is int and 1 <= value['impact'] <= 5, "Question impact must be 1 to 5")
         with transaction(self.root) as db:
             who, run = _access(db, token, run_id, expected, {'author', 'reviewer'})
-            known = _context(db, run)['questions']
+            context = _context(db, run)
+            require(expected_context is None or digest(context) == expected_context, 'Evidence or policy changed; get a fresh assistant task')
+            known = context['questions']
             require(len(known) + len(values) <= 100, "Question limit reached; consolidate with an owner decision")
             norm = lambda s: ' '.join(s.casefold().split())
             for value in values:
@@ -269,11 +290,12 @@ class Controller:
             _touch(db, run, 'awaiting_revision')
         return self.status(token, run_id)
 
-    def submit(self, token, run_id, expected, value):
+    def submit(self, token, run_id, expected, value, expected_context=None):
         value = draft(value)
         with transaction(self.root) as db:
             who, run = _access(db, token, run_id, expected, {'author'})
             context = _context(db, run)
+            require(expected_context is None or digest(context) == expected_context, 'Evidence or policy changed; get a fresh assistant task')
             require(run['rewrites'] < context['policy']['policy']['max_rewrites'] or run['revision'] == 0, "Rewrite budget exhausted; an operator must authorize another cycle")
             _record(db, run_id, who, 'draft', {'draft': value, 'context_digest': digest(context), 'engine_digest': engine_digest(), 'revision': run['revision'] + 1})
             db.execute('UPDATE refine_runs SET revision=revision+1,rewrites=rewrites+? WHERE id=?', (int(run['revision'] > 0), run_id))
@@ -312,11 +334,12 @@ class Controller:
             _touch(db, run, 'awaiting_revision')
         return self.status(token, run_id)
 
-    def reserve_call(self, token, run_id, expected, stage):
+    def reserve_call(self, token, run_id, expected, stage, expected_context=None):
         require(stage in {'draft', 'review'}, "Unknown model stage")
         with transaction(self.root) as db:
             who, run = _access(db, token, run_id, expected, {'author'} if stage == 'draft' else {'reviewer'})
             context = _context(db, run)
+            require(expected_context is None or digest(context) == expected_context, 'Evidence or policy changed; refresh before inference')
             if stage == 'draft':
                 require(not any(q['state'] == 'open' for q in context['questions'].values()), "Owner decisions are pending; resolve them before another drafting call")
             else:
@@ -327,19 +350,29 @@ class Controller:
             _touch(db, run, run['state'])
         return call_id, self.status(token, run_id)
 
-    def finish_call(self, token, run_id, call_id, model, success, elapsed):
+    def finish_call(self, token, run_id, call_id, model, success, elapsed, metrics=None, provider='custom', prompt_digest=None):
         text(model, 'model identifier', 200)
         require(type(success) is bool and type(elapsed) in (float, int) and 0 <= elapsed < 3600, "Invalid model-call metadata")
+        require(provider in {'ollama', 'local-openai', 'openai', 'anthropic', 'custom'}, 'Invalid provider metadata')
+        allowed_metrics = {'total_duration', 'load_duration', 'prompt_eval_count', 'prompt_eval_cached_count', 'prompt_eval_duration', 'eval_count', 'eval_duration', 'input_tokens', 'output_tokens', 'cache_read_input_tokens', 'cache_creation_input_tokens', 'prompt_tokens', 'completion_tokens', 'total_tokens', 'validation_milliseconds', 'provider_milliseconds'}
+        metrics = {k: v for k, v in (metrics or {}).items() if k in allowed_metrics and type(v) is int and 0 <= v < 10**15}
         with transaction(self.root) as db:
             who, _ = _access(db, token, run_id)
             calls = [r for r in _records(db, run_id, 'model_call_started') if r['seq'] == call_id and r['actor'] == who['actor']]
             require(bool(calls), "Reserved model call not found for this actor")
             require(all(r['data']['call_id'] != call_id for r in _records(db, run_id, 'model_call_finished')), "Model-call result already recorded")
-            _record(db, run_id, who, 'model_call_finished', {'call_id': call_id, 'model': model, 'succeeded': success, 'elapsed_seconds': elapsed})
+            _record(db, run_id, who, 'model_call_finished', {'call_id': call_id, 'model': model, 'provider': provider, 'prompt_digest': prompt_digest, 'succeeded': success, 'elapsed_seconds': elapsed, 'metrics': metrics or {}})
+
+    def reject_preflight(self, token, run_id, expected, stage, reason):
+        require(stage in {'draft', 'review'}, 'Unknown model stage')
+        text(reason, 'preflight reason', 2000)
+        with transaction(self.root) as db:
+            who, _ = _access(db, token, run_id, expected, {'author'} if stage == 'draft' else {'reviewer'})
+            _record(db, run_id, who, 'model_preflight_rejected', {'stage': stage, 'reason': reason, 'inference_reserved': False})
 
     def plan(self, token, run_id, profile='cucumber'):
         from .handoff import plan_files
-        with transaction(self.root) as db:
+        with transaction(self.root, write=False) as db:
             _, run = _access(db, token, run_id)
             require(run['state'] in {'awaiting_approval', 'approved'}, "No approvable handoff in this state")
             current, context, assessment = _ready(db, run)
@@ -387,7 +420,7 @@ class Controller:
 
     def exported(self, token, run_id, approval_id):
         require(type(approval_id) is int, "Invalid approval ID")
-        with transaction(self.root) as db:
+        with transaction(self.root, write=False) as db:
             _access(db, token, run_id)
             row = db.execute('SELECT payload,digest FROM refine_exports WHERE run_id=? AND approval_id=?', (run_id, approval_id)).fetchone()
             require(row is not None, "No sealed export exists")
@@ -396,7 +429,7 @@ class Controller:
             return value
 
     def status(self, token, run_id):
-        with transaction(self.root) as db:
+        with transaction(self.root, write=False) as db:
             who, run = _access(db, token, run_id)
             context = _context(db, run)
             drafts = _records(db, run_id, 'draft'); reviews = _records(db, run_id, 'review')
@@ -404,10 +437,10 @@ class Controller:
             checked = checks.check(current['data']['draft'], context['sources'], context['policy']['policy']) if current else None
             stale = bool(current and (current['data']['context_digest'] != digest(context) or current['data']['engine_digest'] != engine_digest()))
             ordered = sorted((q for q in context['questions'].values() if q['state'] == 'open'), key=lambda q: (-q['impact'], q['id']))
-            return {'actor': {'name': who['actor'], 'role': who['role']}, 'run': run, 'context': context, 'context_digest': digest(context), 'draft': current['data']['draft'] if current else None, 'draft_digest': digest(current['data']['draft']) if current else None, 'draft_record': current['seq'] if current else None, 'stale': stale, 'checks': checked, 'review': reviews[-1]['data'] if reviews and current and reviews[-1]['data']['draft_record'] == current['seq'] and not stale else None, 'next_question': ordered[0] if ordered else None, 'open_questions': ordered, 'events': [{'id': r['seq'], 'kind': r['kind'], 'actor': r['actor'], 'digest': r['digest']} for r in _records(db, run_id)]}
+            return {'actor': {'name': who['actor'], 'role': who['role']}, 'run': run, 'context': context, 'context_digest': digest(context), 'draft': current['data']['draft'] if current else None, 'draft_digest': digest(current['data']['draft']) if current else None, 'draft_record': current['seq'] if current else None, 'stale': stale, 'checks': checked, 'review': reviews[-1]['data'] if reviews and current and reviews[-1]['data']['draft_record'] == current['seq'] and not stale else None, 'next_question': ordered[0] if ordered else None, 'open_questions': ordered, 'model_calls': [r['data'] for r in _records(db, run_id, 'model_call_finished')][-12:], 'events': [{'id': r['seq'], 'kind': r['kind'], 'actor': r['actor'], 'digest': r['digest']} for r in _records(db, run_id)]}
 
     def list_runs(self, token):
-        with transaction(self.root) as db:
+        with transaction(self.root, write=False) as db:
             _schema(db); who = authenticate(db, token)
             query = 'SELECT * FROM refine_runs'; args = ()
             if who['role'] == 'author':
@@ -415,7 +448,7 @@ class Controller:
             return [dict(r) for r in db.execute(query + ' ORDER BY created DESC', args)]
 
     def verify(self, token, run_id):
-        with transaction(self.root) as db:
+        with transaction(self.root, write=False) as db:
             _access(db, token, run_id)
             previous = ''
             for record in _records(db, run_id):

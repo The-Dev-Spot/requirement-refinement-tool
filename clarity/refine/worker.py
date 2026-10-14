@@ -4,10 +4,12 @@ from __future__ import annotations
 import http.client
 import json
 import time
+from contextlib import nullcontext
 from typing import Protocol
 
-from ..guardrails import ValidationError, canonical, _unique
+from ..guardrails import ValidationError, canonical, digest, _unique
 from ..audit import SECRETS
+from .schemas import response_schema
 from .contracts import CATEGORIES, SEMANTIC_CHECKS, draft, fields, items, require, review, text
 
 SYSTEM = """You are Clarity, a standalone requirements analyst. Your sole objective is
@@ -27,6 +29,9 @@ exact quotations with source_id and source_digest from the provided context.
 Proposals remain unconfirmed and cannot be silently promoted to requirements.
 Return JSON only, matching the requested contract. Do not include reasoning traces,
 confidence claims, shell commands, tools, scores about your own writing, or secrets.
+Check quantities and units, exact inclusive/exclusive boundaries, dates and time
+zones, conflicting source versions and undefined domain terms where relevant.
+Ask for material missing decisions; never invent a constraint to fill a checklist.
 """
 
 DRAFT_CONTRACT = {
@@ -60,15 +65,18 @@ class Ollama:
 A loopback address does not certify local inference: the operator must verify that
 its Ollama deployment/model is not cloud-backed. No model is selected implicitly.
 """
-    def __init__(self, model: str, *, port: int = 11434, timeout: int = 120):
+    def __init__(self, model: str, *, port: int = 11434, timeout: int = 120, max_tokens: int = 8192, keep_alive: int = 300):
         text(model, 'model', 200)
         require(type(port) is int and 1 <= port <= 65535 and type(timeout) is int and 1 <= timeout <= 120, 'Invalid local model connection settings')
         require(not any(ord(c) < 32 for c in model), 'Invalid model identifier')
+        require(type(max_tokens) is int and 256 <= max_tokens <= 16384 and type(keep_alive) is int and 0 <= keep_alive <= 600, "Invalid inference limits")
         self.name, self.port, self.timeout = model, port, timeout
+        self.provider = 'ollama'
+        self.max_tokens, self.keep_alive, self.metrics = max_tokens, keep_alive, {}
 
     def complete(self, system, payload):
         require(len(canonical(payload).encode()) <= 200000, 'Selected evidence exceeds this model-call input budget')
-        body = canonical({'model': self.name, 'stream': False, 'format': 'json', 'messages': [{'role': 'system', 'content': system}, {'role': 'user', 'content': canonical(payload)}], 'options': {'num_predict': 8192, 'temperature': 0}})
+        body = canonical({'model': self.name, 'stream': False, 'format': payload.get('response_schema', 'json'), 'keep_alive': str(self.keep_alive) + 's', 'messages': [{'role': 'system', 'content': system}, {'role': 'user', 'content': canonical(payload)}], 'options': {'num_predict': self.max_tokens, 'temperature': 0}})
         connection = http.client.HTTPConnection('127.0.0.1', self.port, timeout=self.timeout)
         try:
             connection.request('POST', '/api/chat', body=body.encode(), headers={'Content-Type': 'application/json'})
@@ -80,6 +88,7 @@ its Ollama deployment/model is not cloud-backed. No model is selected implicitly
             require(envelope.get('done') is True and envelope.get('done_reason') != 'length', 'Model output is incomplete or truncated')
             message = envelope.get('message')
             require(isinstance(message, dict) and not message.get('tool_calls') and isinstance(message.get('content'), str), 'Model response must be complete text without tool calls')
+            self.metrics = {k: v for k, v in envelope.items() if k in {'total_duration', 'load_duration', 'prompt_eval_count', 'prompt_eval_cached_count', 'prompt_eval_duration', 'eval_count', 'eval_duration'} and type(v) is int and 0 <= v < 10**15}
             return decode(message['content'])
         except (OSError, UnicodeError, http.client.HTTPException) as exc:
             raise ValidationError('Local model call failed; the reserved attempt remains recorded for safe retry') from exc
@@ -107,34 +116,61 @@ def request_packet(status, stage):
             'draft': current, 'machine_findings': status['checks'],
             'output_contract': {'draft_digest': status['draft_digest'], 'checks': {key: check_shape for key in SEMANTIC_CHECKS}, 'statement_support': {s['id']: check_shape for s in current['statements']}, 'scenario_fidelity': {s['id']: check_shape for s in current['scenarios']}, 'warning_resolutions': {}, 'ambiguities': []},
         })
+    payload['response_schema'] = response_schema(stage, status)
     return payload
 
 
-def run_stage(controller, token, run_id, expected, stage, provider: Provider):
-    # Charge/reserve before the external operation. No automatic retry, and no
-    # database transaction is held while waiting for inference.
-    call_id, status = controller.reserve_call(token, run_id, expected, stage)
+def preflight(status, stage):
+    if stage == 'draft' and status['open_questions']:
+        raise ValidationError('Owner decisions are pending; resolve them before another drafting call')
+    packet = request_packet(status, stage)
+    require(len(canonical(packet).encode()) <= 200000, 'Selected evidence exceeds the model-call input budget; select smaller excerpts before retrying')
+    require(not any(pattern.search(canonical(packet)) for pattern in SECRETS), 'Selected material contains a credential-like literal; redact it before model processing')
+    return packet
+
+
+def run_stage(controller, token, run_id, expected, stage, provider: Provider, cancelled=lambda: False, apply_guard=nullcontext):
+    status = controller.status(token, run_id)
+    packet = prepare(controller, token, run_id, expected, stage, status)
+    require(not cancelled(), 'Model operation cancelled before inference')
+    # Preflight does not consume inference allowance. Recheck the exact context
+    # atomically when reserving; a changed version/policy never slips into a call.
+    call_id, reserved = controller.reserve_call(token, run_id, expected, stage, status['context_digest'])
     started = time.monotonic()
+    provider_finished = None
     success = False
     try:
-        if stage == 'draft' and status['open_questions']:
-            raise ValidationError('Owner decisions are pending; answer or explicitly resolve them before another drafting call')
-        packet = request_packet(status, stage)
-        require(len(canonical(packet).encode()) <= 200000, 'Selected evidence exceeds the model-call input budget')
-        require(not any(pattern.search(canonical(packet)) for pattern in SECRETS), "Selected material contains a credential-like literal; redact it before model processing")
+        require(not cancelled(), 'Model operation cancelled before inference')
         response = provider.complete(SYSTEM, packet)
-        version = status['run']['version']
-        if stage == 'draft':
-            fields(response, {'questions', 'draft'}, 'draft-stage response')
-            questions = items(response['questions'], 'model questions', 5)
-            require(bool(questions) != (response['draft'] is not None), 'Return either questions or a draft, never both or neither')
-            if questions:
-                result = controller.ask_many(token, run_id, version, questions)
+        provider_finished = time.monotonic()
+        with apply_guard():
+            require(not cancelled(), 'Model operation cancelled; provider output was not applied')
+            version = reserved['run']['version']
+            if stage == 'draft':
+                fields(response, {'questions', 'draft'}, 'draft-stage response')
+                questions = items(response['questions'], 'model questions', 5)
+                require(bool(questions) != (response['draft'] is not None), 'Return either questions or a draft, never both or neither')
+                if questions:
+                    result = controller.ask_many(token, run_id, version, questions, status['context_digest'])
+                else:
+                    result = controller.submit(token, run_id, version, draft(response['draft']), status['context_digest'])
             else:
-                result = controller.submit(token, run_id, version, draft(response['draft']))
-        else:
-            result = controller.review(token, run_id, version, review(response, status['draft'], status['draft_digest']))
+                if isinstance(response.get('warning_resolutions'), dict):
+                    response['warning_resolutions'] = {k: v for k, v in response['warning_resolutions'].items() if v is not None}
+                result = controller.review(token, run_id, version, review(response, status['draft'], status['draft_digest']))
         success = True
         return result
     finally:
-        controller.finish_call(token, run_id, call_id, provider.name, success, round(time.monotonic() - started, 3))
+        ended = time.monotonic()
+        metrics = dict(getattr(provider, 'metrics', {}))
+        if provider_finished is not None:
+            metrics.update(provider_milliseconds=round((provider_finished - started) * 1000), validation_milliseconds=round((ended - provider_finished) * 1000))
+        controller.finish_call(token, run_id, call_id, provider.name, success, round(ended - started, 3), metrics,
+                               getattr(provider, 'provider', 'custom'), digest({'system': SYSTEM, 'instruction': packet['instruction'], 'response_schema': packet['response_schema']}))
+
+
+def prepare(controller, token, run_id, expected, stage, status):
+    try: return preflight(status, stage)
+    except ValidationError as exc:
+        controller.reject_preflight(token, run_id, expected, stage, str(exc))
+        raise

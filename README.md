@@ -1,98 +1,103 @@
-# Clarity — excellent requirements, from any starting point
+# Clarity
 
-**Flexible input. One quality standard. Developer-ready output.**
+Turn a rough idea into a requirement people can build and test.
 
-Clarity is a standalone requirement-refinement product. A senior analyst, a junior
-analyst and someone describing an everyday problem can start differently, but the
-approved handoff must be equally clear, complete, consistent, faithful to the agreed
-need and testable. Less complete input requires more assistance, not a lower bar.
+Clarity is a local application for capturing a need, selecting evidence, resolving
+business decisions and producing a reviewed developer handoff. Use Copilot, Codex,
+Claude Code or a locally hosted model. Every starting point meets the same final
+quality standard. Gherkin is the canonical acceptance format.
 
-**Gherkin is the canonical acceptance-criteria format.** The approved `.feature`
-text is exported unchanged for development and test management, including an
-explicitly selected Xray export profile. This is not a development-pipeline front
-end, and it performs no tracker writes.
+## Start here
 
-## v0.3: brief-to-handoff workspace
-
-The `clarity.refine` workflow adds plain-language capture, decision-focused intake,
-exact source quotations, operator-confirmed reference applicability, rule-to-scenario
-coverage, independent claim/scenario review, bounded model assistance and an
-interactive loopback workbench. It reuses the existing private SQLite workspace
-and capability format, with separate additive tables for incomplete briefs.
-
-A handoff contains the requirement, the **same approved Gherkin**, a traceability
-matrix, selected evidence/decisions, the quality review and a hash manifest.
-Only an operator can approve and seal it after independent review. Unresolved
-business questions, unconfirmed proposals, unsupported statements and hard quality
-failures cannot be waived into readiness.
-
-## Start from a checkout
-
-Python 3.11+ on Linux/POSIX is required for private controller state.
+Requires Python 3.11+ on Linux, macOS or WSL with POSIX file permissions.
+From this checkout:
 
 ```sh
+python -m venv .venv
+. .venv/bin/activate
 python -m pip install --require-hashes --only-binary=:all: -r requirements.lock
-python -m unittest discover -s tests -v
-python -m clarity.refine --state "$HOME/.local/state/clarity" init
+python -m pip install --require-hashes --only-binary=:all: -r requirements-build.lock
+python -m pip install --no-deps --no-build-isolation .
+clarity setup
+clarity start
 ```
 
-Then follow the [refinement walkthrough](docs/refinement-workflow.md) to provision
-separate author, reviewer and operator keys and start the workbench. Model use is
-**disabled by default**. Optional Ollama assistance requires explicit model choices
-and connects only to an operator-managed loopback endpoint; verify that the chosen
-models actually run locally before submitting private material.
+Open **http://127.0.0.1:8765**. Setup prints the locations of three private login
+files: `author.key`, `reviewer.key` and `operator.key`. Paste a file's contents into
+**Workspace login key** to use that role. Sign out to switch roles.
+
+1. Sign in as **operator**, then open **Setup** to configure your assistant/local
+   model, source connections and project quality settings.
+2. Sign in as **author**. Capture the problem in plain language and attach relevant
+   source versions. Connect your coding assistant or run a saved local model.
+3. Use **operator** to answer consequential questions and confirm source applicability.
+4. Use **reviewer** in a fresh assistant conversation to check the draft independently.
+5. Use **operator** to inspect and approve the exact handoff, then seal and download it.
+
+Model use is opt-in. No model is downloaded or selected automatically.
+The workspace defaults to `~/.local/share/clarity`; use `--state /absolute/path`
+with setup, start and doctor to choose another private location.
+
+## Choose how to run
+
+| Option | How it connects | What you need |
+| --- | --- | --- |
+| Copilot in VS Code | Scoped stdio MCP server | Your configured Copilot client |
+| Codex | Scoped stdio MCP server | Your configured Codex client |
+| Claude Code | Scoped stdio MCP server | Your configured Claude Code client |
+| Ollama | `127.0.0.1:<port>/api/chat` | A running model with JSON-schema support |
+| LM Studio, vLLM or a custom local server | OpenAI-compatible Chat Completions on loopback | JSON-schema support and the exact model ID |
+| OpenAI or Anthropic API | Optional fixed HTTPS provider | An API key and explicit permission to send selected evidence |
+
+Open a requirement's **Connect your assistant** panel for client configuration.
+Assistant login stays in that client; subscriptions are not reused as API keys.
+The bridge exposes task retrieval and result submission for one requirement.
+It cannot answer owner questions, configure policy, approve or publish.
+See [assistant setup](docs/assistants.md) and [model setup](docs/models.md).
+
+## Sources and handoffs
+
+Capture text or UTF-8 files in **Sources**, or explicitly read a selected Linear
+issue, Jira Cloud issue or Confluence Cloud page. Connections enforce the selected
+team, project or space. Captured versions retain their source locator, revision,
+effective date when known and retrieval time. An operator confirms applicability.
+Attach only the relevant excerpts; changes require a fresh draft and review.
+
+A sealed handoff includes the requirement, unchanged `acceptance.feature`, coverage,
+citations, selected evidence, independent review and a hash manifest. Approval binds
+that exact revision and expires after 15 minutes. Unresolved questions, unsupported
+claims and objective quality failures block delivery.
+
+Import only **acceptance.feature** into test management. The ZIP contains selected
+evidence. Cucumber, Xray Cloud and Xray Server/DC profiles are local export choices;
+no tracker write or verified live import is implied. See [the Xray pilot](docs/xray-pilot.md).
+
+## Guides
+
+- [First run and daily use](docs/refinement-workflow.md)
+- [Assistant connections](docs/assistants.md) and [local/cloud model setup](docs/models.md)
+- [Source management](docs/sources.md), [backup and recovery](docs/recovery.md), [troubleshooting](docs/troubleshooting.md)
+- [Handoff standard](docs/handoff-standard.md), [operating contract](AGENTS.md), [security](SECURITY.md)
+- [Quality evaluation](docs/evaluation.md), [architecture](docs/architecture.md), [remaining qualification](docs/roadmap.md)
+- [Prepare a clean recipient handover](docs/data-hygiene.md) and [upgrade checklist](docs/upgrade-notes.md)
+- [Specialist role library](.github/agents/README.md) and [contributing](CONTRIBUTING.md)
+
+## Development and verification
 
 ```sh
-python -m clarity.refine --state "$HOME/.local/state/clarity" serve
+python -m unittest discover -s tests -v
+python -m clarity validate-config
+python -m clarity check-repo
+python -m pip install --require-hashes --only-binary=:all: -r requirements-build.lock
+python -m pip wheel --no-deps --no-build-isolation .
 ```
 
-Open the local address printed by that command. Without a model configured, an
-analyst can import a structured draft/review through the same governed workflow.
-No model availability or live-model quality is assumed.
+Stage new source files before the tracked-file hygiene scan. Browser checks have a
+separate [setup guide](tests/browser/README.md). Use [evaluation](docs/evaluation.md)
+to assess a chosen model; passing unit tests does not prove semantic correctness or
+equal real-world outcomes across input styles.
 
-## Product contracts
-
-| Area | Implemented behavior |
-| --- | --- |
-| Raw input | Ordinary-language brief; no invented ACs, classification or completeness required at capture |
-| Questions | Impact-ranked, one shown next; why the decision matters; stable IDs; authorized answers and explicit merge/scope resolutions |
-| Evidence | Immutable source capture, exact quotation/hash checks, independent support judgments and recorded reference authority |
-| Acceptance criteria | Official Gherkin parser/compiler, scenario IDs, context/action/outcome, outline/example checks, explicit rule coverage |
-| Independent review | Separate capability, every statement and scenario reviewed, cold-read/counterexample challenge; no writer self-score |
-| Approval | Exact source, policy, draft, review, export profile and file hashes; expiry, revocation and transactional local sealing |
-| Workbench | Local forms, server-side sessions, CSRF/origin/Host checks, escaped text and no external page resources |
-| Model execution | Opt-in bounded draft/question and independent-review stages; no tools, no approvals, no automatic retries |
-| Evaluation | Same-need expert/partial/plain-input harness with per-group reporting and honest missing-output handling |
-
-## What is not proven or implemented
-
-Quotation verification is not proof that a claim follows from its source. Model
-review is not proof of correctness or genuine independence. The synthetic tests
-and parity fixtures do not establish equal real-world outcomes across user groups;
-that needs repeated model runs and blind developer/tester review with human labels.
-
-The workbench is a **single trusted local workspace**, not a public server, enterprise
-identity system or multi-tenant service. Keep controller state and keys outside
-agent access. Do not expose the listener through a tunnel or reverse proxy.
-There is no live Xray/Jira publication, verified Xray round-trip, automatic test
-implementation, automatic deletion, backup encryption or development-pipeline link.
-
-Import only `acceptance.feature` into test management—not the evidence-bearing
-handoff ZIP. `.feature` files specify tests; automation still needs step definitions.
-Repeated external imports need a separately designed reconciliation strategy.
-
-## Documentation
-
-- [Operating contract](AGENTS.md), [handoff standard](docs/handoff-standard.md), and [Definition of Ready](rubric/definition-of-ready.md).
-- [Refinement walkthrough](docs/refinement-workflow.md), [architecture](docs/architecture.md), and [security boundaries](SECURITY.md).
-- [v0.3 implementation review](docs/review/2026-09-29-quality-handoff.md) and [next work](docs/roadmap.md).
-- [Ten specialist roles](.github/agents/README.md) and [anonymization boundary](docs/anonymization.md).
-
-The v0.2 `python -m clarity work` snapshot controller and its
-[walkthrough](docs/standalone-workflow.md) remain for compatibility. Its checklist
-snapshots and legacy exports are not automatically upgraded into the v0.3 Gherkin
-handoff contract. The new `refine` APIs cannot approve or export a legacy snapshot.
-
-The repository remains private. No original corporate history, proprietary corpus,
-real operational records or credentials are included. No open-source licence is
-granted by this change.
+This is one trusted local workspace. Keep the listener on loopback and keep private
+state out of shared repositories. It is not a hosted multi-user identity system.
+The older snapshot CLI remains for [compatibility](docs/standalone-workflow.md);
+its exports do not satisfy the current Gherkin handoff contract.

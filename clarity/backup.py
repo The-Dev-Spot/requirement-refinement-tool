@@ -28,7 +28,7 @@ def _legacy_event(db, run_id, receipt):
 
 
 def backup(root: Path, token: str) -> dict:
-    with transaction(root) as db:
+    with transaction(root, write=False) as db:
         authenticate(db, token, {"operator"})
         tables = {table: [dict(row) for row in db.execute("SELECT * FROM " + table)] for table in TABLES}
         bindings = [dict(r) for r in db.execute("SELECT id,actor,role FROM credentials")]
@@ -39,6 +39,11 @@ def backup(root: Path, token: str) -> dict:
             from .refine.controller import _schema
             _schema(db)
             data["refinement"] = {table: [dict(row) for row in db.execute("SELECT * FROM " + table)] for table in REFINE_TABLES}
+        if db.execute("SELECT 1 FROM sqlite_master WHERE name='workspace_meta'").fetchone():
+            from .workspace import TABLES as WORKSPACE_TABLES
+            require(bool(found), 'Workspace configuration requires the refinement namespace')
+            data['schema_version'] = 3
+            data['workspace'] = {table: [dict(row) for row in db.execute('SELECT * FROM ' + table)] for table in WORKSPACE_TABLES}
         require(len(canonical(data).encode()) <= MAX_BACKUP_BYTES, "Backup exceeds supported size; no partial backup was created")
         return {"data": data, "digest": digest(data)}
 
@@ -68,8 +73,8 @@ replacement of both the backup and receipt. Historical sealed exports survive.
     data = envelope["data"]
     require(isinstance(data, dict), "Invalid backup data")
     version = data.get("schema_version")
-    require(type(version) is int and version in {1, 2}, "Unsupported backup version")
-    fields(data, {"schema_version", "credential_bindings", "tables"} | ({"refinement"} if version == 2 else set()), "backup")
+    require(type(version) is int and version in {1, 2, 3}, "Unsupported backup version")
+    fields(data, {"schema_version", "credential_bindings", "tables"} | ({"refinement"} if version >= 2 else set()) | ({"workspace"} if version == 3 else set()), "backup")
     require(envelope["digest"] == expected_digest and digest(data) == expected_digest, "Backup digest mismatch")
     fields(data["tables"], set(TABLES), "backup tables")
     require(isinstance(data["credential_bindings"], list) and all(isinstance(data["tables"][t], list) for t in TABLES), "Invalid backup records")
@@ -82,13 +87,22 @@ replacement of both the backup and receipt. Historical sealed exports survive.
         body["data"] = json.loads(row["data"])
         require(row["previous_hash"] == previous.get(row["run_id"], "") and digest(body) == row["hash"], "Backup event chain mismatch")
         previous[row["run_id"]] = row["hash"]
-    if version == 2:
+    if version >= 2:
         _validate_refinement(data["refinement"])
+    if version == 3:
+        from .workspace import TABLES as WORKSPACE_TABLES
+        fields(data['workspace'], set(WORKSPACE_TABLES), 'workspace backup tables')
+        require(data['workspace']['workspace_meta'] == [{'version': 1}], 'Unsupported workspace backup version')
+        for row in data['workspace']['workspace_records']:
+            require(digest(json.loads(row['payload'])) == row['digest'], 'Workspace configuration digest mismatch')
     require(not root.exists(), "Restore destination must not exist")
     initialize(root)
-    if version == 2:
+    if version >= 2:
         from .refine.controller import initialize as initialize_refinement
         initialize_refinement(root)
+    if version == 3:
+        from .workspace import initialize as initialize_settings
+        initialize_settings(root)
     # A failed restore may leave an empty initialized workspace, never partially
     # committed evidence. Do not retry by overwriting it; inspect and choose anew.
     with transaction(root) as db:
@@ -96,18 +110,22 @@ replacement of both the backup and receipt. Historical sealed exports survive.
             fields(binding, {"id", "actor", "role"}, "credential binding")
             db.execute("INSERT INTO credentials(id,actor,role,hash,active) VALUES(?,?,?,'restored-disabled',0)", (binding["id"], binding["actor"], binding["role"]))
         selected = {table: data["tables"][table] for table in TABLES}
-        if version == 2:
+        if version >= 2:
             selected.update({table: data["refinement"][table] for table in REFINE_TABLES if table != 'refine_meta'})
+        if version == 3:
+            selected.update({table: data['workspace'][table] for table in WORKSPACE_TABLES if table != 'workspace_meta'})
         for table, rows in selected.items():
             columns = [c[1] for c in db.execute("PRAGMA table_info(" + table + ")")]
             for row in rows:
                 fields(row, set(columns), "backup row")
                 db.execute("INSERT INTO " + table + " (" + ",".join(columns) + ") VALUES(" + ",".join("?" for _ in columns) + ")", [row[c] for c in columns])
+        if version == 3:
+            db.execute("UPDATE workspace_jobs SET status='interrupted',message='Restored; inspect the requirement before explicitly retrying' WHERE status IN ('queued','running','applying','cancel_requested')")
         db.execute("UPDATE approvals SET revoked=1 WHERE consumed=0")
         db.execute("UPDATE runs SET state='awaiting_approval',version=version+1 WHERE state='approved'")
         for run in db.execute("SELECT id FROM runs").fetchall():
             _legacy_event(db, run[0], expected_digest)
-        if version == 2:
+        if version >= 2:
             from .refine.controller import _record
             db.execute("UPDATE refine_runs SET state='awaiting_review',version=version+1 WHERE state='approved'")
             who = {"actor": "local-restore", "id": "restored-disabled"}

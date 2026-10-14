@@ -77,7 +77,7 @@ def initialize(root: Path) -> None:
 
 
 @contextmanager
-def transaction(root: Path):
+def transaction(root: Path, *, write: bool = True):
     root = root.absolute()
     private_path(root, directory=True)
     path = root / "state.sqlite3"
@@ -93,7 +93,9 @@ def transaction(root: Path):
         db.execute("PRAGMA synchronous=FULL")
         if db.execute("PRAGMA user_version").fetchone()[0] != SCHEMA:
             raise ValidationError("Unsupported database schema; do not overwrite it")
-        db.execute("BEGIN IMMEDIATE")
+        if not write:
+            db.execute("PRAGMA query_only=ON")
+        db.execute("BEGIN IMMEDIATE" if write else "BEGIN")
         yield db
         db.commit()
     except BaseException:

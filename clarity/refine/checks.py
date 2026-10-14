@@ -51,9 +51,26 @@ Scenario aliases, Rules, Backgrounds and example rows retain their original text
                 examples = node.get("examples", [])
                 # An outline with no Examples has no compiled case; verify that below.
                 for example in examples:
+                    # Resolve template parameters in every argument, including tables
+                    # and Doc Strings. Markup in ordinary scenarios remains literal.
+                    parameters = set(re.findall(r'<([A-Za-z_][A-Za-z0-9_]*)>', node['name']))
+                    for step in steps:
+                        parameters.update(re.findall(r'<([A-Za-z_][A-Za-z0-9_]*)>', step['text']))
                     tags.extend(t["name"] for t in example.get("tags", []))
                     header = [c["value"] for c in example.get("tableHeader", {}).get("cells", [])]
                     require(bool(header) and len(set(header)) == len(header) and all(header), "Example headers must be unique and nonempty")
+                    for step in steps:
+                        argument_texts = []
+                        if 'docString' in step:
+                            argument_texts.append(step['docString']['content'])
+                        if 'dataTable' in step:
+                            argument_texts.extend(c['value'] for row in step['dataTable']['rows'] for c in row['cells'])
+                        # Only parameter-looking tokens not used as markup are
+                        # treated as templates. Attribute/closing tags stay literal.
+                        for argument in argument_texts:
+                            parameters.update(m.group(1) for m in re.finditer(r'<([A-Za-z_][A-Za-z0-9_]*)>', argument)
+                                              if '</' + m.group(1) + '>' not in argument)
+                    require(parameters <= set(header), 'Outline argument references a missing Examples column')
                     body = example.get("tableBody", [])
                     require(bool(body), "An Examples table needs data rows")
                     for row in body:
@@ -76,7 +93,7 @@ Scenario aliases, Rules, Backgrounds and example rows retain their original text
             # Only unresolved outline parameters are rejected; literal comparisons
             # such as amount < limit do not match this placeholder form.
             require(not re.search(r"<[A-Za-z_][A-Za-z0-9_]*>", step["text"]), "Unresolved example placeholder")
-    return {"language": root.get("language", "en"), "scenarios": scenarios, "tags": tags, "compiled_cases": len(compiled)}
+    return {"language": root.get("language", "en"), "scenarios": scenarios, "tags": tags, "compiled_cases": len(compiled), "examples": [{"name": c["name"], "scenario_ids": [s["id"] for s in scenarios if s["ast_id"] in c.get("astNodeIds", [])], "steps": [step["text"] for step in c["steps"]]} for c in compiled]}
 
 
 def signals(value: Any, scope: str = "input") -> list[dict]:
@@ -122,6 +139,25 @@ def check(value: dict, sources: dict[str, dict], selected_policy: dict) -> dict:
                 flag("fabricated_quote", sid, "Quoted passage is not present verbatim in the captured source")
             elif source["kind"] == "reference" and not source["authority"]:
                 flag("unconfirmed_authority", sid, "Reference applicability requires a recorded operator decision")
+    definitions = ' '.join(s['text'] for s in statements.values() if s['kind'] == 'definition').casefold()
+    numeric_rules = {}
+    for statement in statements.values():
+        if statement['kind'] not in {'rule', 'constraint'}: continue
+        body, sid = statement['text'], statement['id']
+        for match in re.finditer(r'\b(?:within|after|for)\s+(\d+(?:\.\d+)?)\b\s*([A-Za-z%]*)', body, re.I):
+            if not re.fullmatch(r'(?:milli)?seconds?|minutes?|hours?|days?|weeks?|months?|years?|bytes?|k[bg]|m[bg]|g[bg]|percent|%', match.group(2), re.I):
+                flag('quantity_unit', sid, 'Check the unit and interpretation of this numeric duration or quantity', 'warning')
+        if re.search(r'\b(?:[01]?\d|2[0-3]):[0-5]\d\b|\b20\d{2}-\d{2}-\d{2}\b', body) and not re.search(r'UTC|time.?zone|local time|[+-]\d\d:\d\d|Z\b', body, re.I):
+            flag('time_context', sid, 'Check whether this date/time requires an explicit timezone or local-time rule', 'warning')
+        if re.search(r'\b(?:up to|between)\s+\d', body, re.I) and not re.search(r'inclusiv|exclusiv|exactly|at most|at least', body, re.I):
+            flag('numeric_boundary', sid, 'Confirm whether the stated numeric limits include their endpoints', 'warning')
+        terms = set(re.findall(r'\b[A-Z]{2,8}\b', body)) - {'API', 'HTTP', 'HTTPS', 'JSON', 'CSV', 'UTF', 'UTC', 'ID', 'UI', 'XML'}
+        if any(term.casefold() not in definitions for term in terms):
+            flag('domain_term', sid, 'Check whether a domain abbreviation needs a shared definition', 'warning')
+        key = re.sub(r'\d+(?:\.\d+)?', '#', ' '.join(body.casefold().split()))
+        if key in numeric_rules and numeric_rules[key]['text'] != body:
+            flag('numeric_rule_difference', sid, 'Near-identical rules differ numerically; compare scope and source revision with ' + numeric_rules[key]['id'], 'warning')
+        numeric_rules[key] = statement
     if value["proposals"]:
         flag("unconfirmed_proposal", "draft", "Unconfirmed proposals cannot enter the approved handoff")
     if re.search(r"OPEN\s+QUESTION|\bTBD\b|\bTODO\b", value["feature"], re.I):
