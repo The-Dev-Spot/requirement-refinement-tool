@@ -71,7 +71,7 @@ its Ollama deployment/model is not cloud-backed. No model is selected implicitly
         prefix, task = prompt_parts(payload)
         options = {'num_predict': self.max_tokens, 'temperature': 0}
         if getattr(self, 'context_tokens', 0): options['num_ctx'] = self.context_tokens
-        body = canonical({'model': self.name, 'stream': False, 'format': payload.get('response_schema', 'json'), 'keep_alive': str(self.keep_alive) + 's', 'messages': [{'role': 'system', 'content': system}, {'role': 'user', 'content': prefix}, {'role': 'user', 'content': task}], 'options': options})
+        body = canonical({'model': self.name, 'stream': False, 'format': payload.get('response_schema', 'json'), 'keep_alive': str(self.keep_alive) + 's', 'messages': [{'role': 'system', 'content': system}, {'role': 'user', 'content': prefix + '\n' + task}], 'options': options})
         connection = http.client.HTTPConnection('127.0.0.1', self.port, timeout=self.timeout)
         try:
             connection.request('POST', '/api/chat', body=body.encode(), headers={'Content-Type': 'application/json'})

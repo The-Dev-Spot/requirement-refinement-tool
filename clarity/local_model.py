@@ -18,7 +18,7 @@ class LocalModel:
 
     def complete(self, system, payload):
         prefix, task = prompt_parts(payload)
-        body = {'model': self.name, 'stream': False, 'messages': [{'role': 'system', 'content': system}, {'role': 'user', 'content': prefix}, {'role': 'user', 'content': task}],
+        body = {'model': self.name, 'stream': False, 'messages': [{'role': 'system', 'content': system}, {'role': 'user', 'content': prefix + '\n' + task}],
                 'max_tokens': self.max_tokens, 'temperature': 0, 'response_format': {'type': 'json_schema', 'json_schema': {'name': 'clarity_handoff', 'strict': True, 'schema': payload['response_schema']}}}
         connection = http.client.HTTPConnection('127.0.0.1', self.port, timeout=self.timeout)
         try:

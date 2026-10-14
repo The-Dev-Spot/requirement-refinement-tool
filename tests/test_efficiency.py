@@ -271,6 +271,9 @@ class TransportTests(unittest.TestCase):
             with patch(target, return_value=conn): provider.complete(SYSTEM, {'response_schema': {'type': 'object'}, 'context': {}})
             body = json.loads(conn.request.call_args.kwargs['body'])
             self.assertNotIn('response_schema', canonical(body['messages']))
+            # Local chat templates may require alternating roles. Keep one user
+            # message with the stable evidence prefix ahead of changing text.
+            self.assertEqual([m['role'] for m in body['messages']], ['system', 'user'])
             if kind == 'ollama': self.assertEqual(body['options']['num_ctx'], 4096)
 
     def test_scorecard_counts_failed_usage_and_distinguishes_provider_token_semantics(self):
