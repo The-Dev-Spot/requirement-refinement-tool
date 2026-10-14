@@ -314,6 +314,7 @@ class ConfigurationTests(Fixture):
     def test_assistant_revisions_use_same_context_guards_and_compact_receipts(self):
         value = self.ready(); task = packet(self.c, self.a, 'REQ1')
         self.assertEqual(task['stage'], 'revise')
+        self.assertNotIn('output_limit_tokens', task['budget_estimate'])
         result = submit(self.c, self.a, 'REQ1', task['expected_version'], task['context_digest'], {'questions': [], 'revision': revision(value, title='Changed title')})
         self.assertNotIn('scenario_index', canonical(receipt(result)))
         self.assertEqual(result['efficiency']['assistant_submissions'], 1)

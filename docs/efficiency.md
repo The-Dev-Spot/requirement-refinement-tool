@@ -31,6 +31,9 @@ restrict a profile to intake, drafting, revision or independent review. This all
 a smaller model for intake and a separately evaluated model for review. Select the
 profile explicitly on the requirement page; there is no automatic provider fallback.
 All profiles still meet the same final handoff standard.
+These model/output/context settings apply to direct inference. Copilot, Codex and
+Claude Code use their own client model selection and token limits; an MCP task
+contains only an estimate of its task text, not a promise about the client's quota.
 
 The complete-draft output limit is the profile's main output setting. Intake,
 revision and review have their own limits. Older profiles keep their existing
