@@ -66,6 +66,9 @@ Cache thresholds, lifetime, schema changes and deployment behavior affect reuse;
 cache writes can cost extra. Measure total cost rather than assuming a cache hit.
 Ollama keep-alive avoids repeated loading when possible; it is separate from prompt
 caching and token capacity. Clarity does not control a coding assistant's cache.
+Native schemas avoid embedding the changing draft digest as a schema enum; the
+controller still checks its exact supplied value. Schemas can remain stable across
+text edits when statement/scenario IDs and warning fields are unchanged.
 
 ## Read the efficiency measurements
 

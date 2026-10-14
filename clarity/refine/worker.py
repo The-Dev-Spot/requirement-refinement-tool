@@ -118,6 +118,7 @@ def request_packet(status, stage):
             'instruction': 'Perform an INDEPENDENT cold read. No writer self-score or previous reviewer score is provided. Verify every statement is entailed by its cited passages, not merely that the quote exists. Check actual business behavior against every scenario and its examples, scope and all applicable risk cases. Review every inapplicability reason. Try to describe two materially different implementations satisfying the same text; return material ambiguities with their statement IDs. Only context-sensitive machine warnings may have reasoned warning_resolutions; never suppress hard errors or security signals. Do not optimize for a READY verdict.',
             'draft': current, 'machine_findings': compact_checks(status['checks']),
         })
+    if stage == 'review': payload['instruction'] += ' Copy machine_findings.draft_digest exactly.'
     payload['instruction'] += ' Return concise, specific text; review rationales must substantiate each judgment in at least 20 characters. The source BRIEF is the original request. Follow the supplied response schema; no duplicate narrative report is needed.'
     payload['response_schema'] = response_schema(stage, status)
     return payload

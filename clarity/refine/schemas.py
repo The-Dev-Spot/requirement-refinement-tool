@@ -35,7 +35,9 @@ def response_schema(stage, status):
         return obj(questions=QUESTIONS, draft={'anyOf': [DRAFT, {'type': 'null'}]})
     if stage == 'revise':
         props = DRAFT['properties']
-        patch = obj(base_draft_digest={'type': 'string', 'enum': [status['draft_digest']]}, title=NULLABLE,
+        # Keep the schema stable across text edits. The task supplies the digest;
+        # controller validation enforces its exact value before applying output.
+        patch = obj(base_draft_digest=STRING, title=NULLABLE,
                     statements=changes(props['statements']['items']), feature=NULLABLE,
                     scenarios=changes(props['scenarios']['items']),
                     coverage=changes(props['coverage']['items'], obj(statement_id=STRING, category={'type': 'string', 'enum': list(CATEGORIES)})),
@@ -46,7 +48,7 @@ def response_schema(stage, status):
     # A fixed property set works with strict provider schemas. Null means no
     # disposition; the worker removes it before normal controller validation.
     warning_schema = obj(**{k: NULLABLE for k in warnings})
-    return obj(draft_digest={'type': 'string', 'enum': [status['draft_digest']]},
+    return obj(draft_digest=STRING,
                checks=obj(**{k: CHECK for k in SEMANTIC_CHECKS}),
                statement_support=obj(**{s['id']: CHECK for s in value['statements']}),
                scenario_fidelity=obj(**{s['id']: CHECK for s in value['scenarios']}),

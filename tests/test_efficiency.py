@@ -64,6 +64,14 @@ class PacketTests(Fixture):
         self.assertEqual(first[0], second[0]); self.assertNotEqual(first[1], second[1])
         self.assertNotIn('response_schema', first[1])
 
+    def test_native_schema_stays_stable_across_text_edits_but_controller_requires_exact_digest(self):
+        value = self.ready(); before = self.status()
+        revised = {**value, 'title': 'Changed title with the same statement and scenario IDs'}
+        after = self.c.submit(self.a, 'REQ1', self.version(), revised)
+        for stage in ('revise', 'review'):
+            self.assertEqual(request_packet(before, stage)['response_schema'], request_packet(after, stage)['response_schema'])
+        with self.assertRaises(ValidationError): self.c.review(self.r, 'REQ1', self.version(), assessment(value))
+
     def test_capacity_rejection_is_recorded_without_reserving_or_calling_provider(self):
         provider = FakeProvider(error=True); provider.context_tokens = 1024; provider.max_tokens = 1024
         with self.assertRaisesRegex(ValidationError, 'context budget'):
