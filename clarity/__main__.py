@@ -31,7 +31,7 @@ def main(argv: list[str] | None = None) -> int:
     add_commands(sub)
     args = parser.parse_args(argv)
     try:
-        if args.command in {'setup', 'start', 'doctor', 'mcp', 'backup', 'restore', 'source-bundle'}:
+        if args.command in {'setup', 'start', 'doctor', 'mcp', 'efficiency', 'backup', 'restore', 'source-bundle'}:
             return app_commands.execute(args)
         if args.command in {"work", "lint", "import-markdown", "linear-read", "benchmark"}:
             return execute(args)

@@ -1,6 +1,8 @@
 # Workbench browser regression
 
 These tests submit rendered login, capture, model setup, source-file and logout forms in Chromium, and check a narrow responsive viewport.
+They also save stage limits, inspect the pre-run context budget, and run an optional
+intake against a synthetic provider to verify that it never creates a draft.
 They do not set Origin or other browser-generated request headers manually.
 The fixture uses a disposable loopback workspace and synthetic keys; no model,
 external tracker, real credentials or existing workspace is used.

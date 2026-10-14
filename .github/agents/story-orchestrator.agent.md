@@ -16,7 +16,9 @@ The outcome is an excellent developer-and-tester handoff with canonical Gherkin,
 not a high score, few questions or a polished paragraph. Keep budgets bounded and
 surface failures. Stage the exact handoff plan; only the operator approves it.
 No tracker write, model-authored approval, automatic deployment or pipeline dispatch.
-The built-in runner has two bounded stages; do not claim all ten profiles ran.
+The built-in runner has bounded draft/review calls and optional intake/targeted
+revision actions; do not claim all ten profiles ran. Prefer targeted edits for an
+existing draft. The assembled full draft still needs independent review.
 
 All behavior is subordinate to `AGENTS.md`. Read `docs/handoff-standard.md` and
 `docs/refinement-workflow.md`. Analyze locally; no controller credentials or external

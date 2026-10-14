@@ -3,6 +3,7 @@ import http.client
 from .guardrails import canonical, ValidationError
 from .refine.contracts import require, text
 from .refine.worker import decode
+from .efficiency import prompt_parts, usage_metrics
 
 
 class LocalModel:
@@ -16,7 +17,8 @@ class LocalModel:
         self.metrics = {}
 
     def complete(self, system, payload):
-        body = {'model': self.name, 'stream': False, 'messages': [{'role': 'system', 'content': system}, {'role': 'user', 'content': canonical(payload)}],
+        prefix, task = prompt_parts(payload)
+        body = {'model': self.name, 'stream': False, 'messages': [{'role': 'system', 'content': system}, {'role': 'user', 'content': prefix + '\n' + task}],
                 'max_tokens': self.max_tokens, 'temperature': 0, 'response_format': {'type': 'json_schema', 'json_schema': {'name': 'clarity_handoff', 'strict': True, 'schema': payload['response_schema']}}}
         connection = http.client.HTTPConnection('127.0.0.1', self.port, timeout=self.timeout)
         try:
@@ -26,9 +28,9 @@ class LocalModel:
             response = connection.getresponse(); require(response.status == 200, 'Local inference request failed; check model/schema support')
             raw = response.read(1_000_001); require(len(raw) <= 1_000_000, 'Local model response exceeded its budget')
             data = decode(raw.decode()); choices = data.get('choices', [])
+            self.metrics = usage_metrics(data.get('usage', {}))
             require(len(choices) == 1 and choices[0].get('finish_reason') == 'stop', 'Local model output was incomplete')
             message = choices[0]['message']; require(not message.get('tool_calls'), 'Model tools are not permitted')
-            self.metrics = {k: v for k, v in data.get('usage', {}).items() if k in {'prompt_tokens', 'completion_tokens', 'total_tokens'} and type(v) is int and 0 <= v < 10**10}
             return decode(message['content'])
         except (OSError, UnicodeError, http.client.HTTPException) as exc:
             raise ValidationError('Local model unavailable; the attempt remains recorded') from exc

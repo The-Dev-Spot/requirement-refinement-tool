@@ -15,10 +15,13 @@ from urllib.parse import parse_qs, urlsplit
 from ..guardrails import ValidationError, canonical
 from .contracts import require
 from .controller import Controller
-from .handoff import archive
+from .handoff import archive, verify_bundle
 from .worker import decode, run_stage, request_packet
 from ..workspace import Workspace, initialize as initialize_settings
 from ..jobs import Jobs, RuntimeLease
+from ..efficiency import AUTHOR_STAGES, budget
+from ..workspace import model_settings
+from .worker import SYSTEM
 from .. import host_bridge
 from . import views
 from pathlib import Path
@@ -46,23 +49,44 @@ def render_status(status, csrf, model_enabled, planned=None, plan_error=None, *,
         affected = [v['id'] for v in (status['draft'] or {}).get('statements', []) if any(c['source_id'] not in status['context']['sources'] or status['context']['sources'][c['source_id']]['digest'] != c['source_digest'] for c in v['citations'])]
         if affected: body += '<p>Changed source citations affect: ' + esc(', '.join(affected)) + '.</p>'
     if model_enabled and role in {'author', 'reviewer'} and run['state'] not in {'exported', 'rejected'}:
-        stage = 'draft' if role == 'author' else 'review'
-        if not (stage == 'draft' and status['open_questions']):
-            body += make('model', '<small>Explicitly run the configured model using only this brief’s selected evidence. No approval or tracker write is granted.</small>', 'Refine this request' if stage == 'draft' else 'Run independent model review', {'stage': stage})
-    elif not model_enabled and role in {'author', 'reviewer'}:
+        stage = ('revise' if status['draft'] else 'draft') if role == 'author' else 'review'
+        if not (stage in AUTHOR_STAGES and status['open_questions']):
+            body += make('model', '<small>Explicitly run the configured model using only this brief’s selected evidence. No approval or tracker write is granted.</small>', 'Refine this request' if stage in AUTHOR_STAGES else 'Run independent model review', {'stage': stage})
+    elif not model_enabled and role in {'author', 'reviewer'} and run['state'] not in {'exported', 'rejected'}:
         body += '<p class="notice">Use your coding assistant below, or select a saved local model. <a href="/settings">Manage setup</a></p>'
     if role in {'author', 'reviewer'}:
         try:
-            size = len(canonical(request_packet(status, 'draft' if role == 'author' else 'review')).encode())
-            body += '<small>Selected model packet: ' + str(size) + ' / 200000 bytes. Reserved calls this cycle: ' + str(run['calls']) + '.</small>'
+            packet = request_packet(status, ('revise' if status['draft'] else 'draft') if role == 'author' else 'review')
+            usage = budget(SYSTEM, packet)
+            body += '<small>Estimated input: ' + str(usage['estimated_input_tokens']) + ' tokens. Task packet: ' + str(len(canonical(packet).encode())) + ' / 200000 bytes. Reserved calls this cycle: ' + str(run['calls']) + '.</small><small>Estimate = UTF-8 bytes ÷ 3 plus 512 wrapper tokens; actual tokenizers vary. Saved model budgets below reserve output space.</small>'
         except ValidationError: pass
     body += '</section>'
-    if role in {'author', 'reviewer'}:
-        stage = 'draft' if role == 'author' else 'review'
+    if role in {'author', 'reviewer'} and run['state'] not in {'exported', 'rejected'}:
         body += views.assistant_panel(status, csrf, root)
         available = [m for m in models if m['enabled'] and m['provider'] != 'host-assistant']
         if available:
-            body += '<section><h2>Run a saved model</h2>' + make('model-profile', views.select('profile', 'Model connection', [(m['id'], m['id'] + ' · ' + m['model']) for m in available]), 'Draft with selected model' if stage == 'draft' else 'Run independent review', {'stage': stage}) + '<small>Only this requirement’s selected evidence is sent. Jobs run in the background and are never retried automatically.</small></section>'
+            body += '<section><h2>Run a saved model</h2>'
+            if role == 'author' and status['open_questions']:
+                body += '<p>Resolve the pending owner decisions before another model call.</p>'
+            else:
+                stages = (['revise', 'draft'] if status['draft'] else ['draft', 'intake']) if role == 'author' else ['review']
+                labels = {'draft': 'Create a complete draft', 'revise': 'Revise changed items only', 'intake': 'Check missing decisions only (optional)', 'review': 'Run independent review'}
+                rendered = 0
+                for stage in stages:
+                    profiles = [model_settings(m) for m in available if m.get('stage', 'any') in {'any', stage}]
+                    if not profiles: continue
+                    try: packet = request_packet(status, stage)
+                    except ValidationError: continue
+                    section = make('model-profile', views.select('profile', 'Model connection', [(m['id'], m['id'] + ' · ' + m['model']) for m in profiles]), labels[stage], {'stage': stage})
+                    section += '<details><summary>Input and output budgets before running</summary><div class="tablewrap"><table><thead><tr><th>Profile</th><th>Estimated input</th><th>Output reserve</th><th>Context remaining</th></tr></thead><tbody>'
+                    for m in profiles:
+                        usage = budget(SYSTEM, packet, output_tokens=m.get(stage + '_max_tokens', m['max_tokens']), context_tokens=m['context_tokens'])
+                        remaining = 'Unknown capacity' if usage['remaining_estimated_tokens'] is None else str(usage['remaining_estimated_tokens']) + (' · blocked' if not usage['fits_estimated_context'] else '')
+                        section += '<tr><td>' + esc(m['id']) + '</td><td>' + str(usage['estimated_input_tokens']) + '</td><td>' + str(usage['output_limit_tokens']) + '</td><td>' + esc(remaining) + '</td></tr>'
+                    section += '</tbody></table></div></details>'
+                    body += section if rendered == 0 else '<details><summary>' + labels[stage] + '</summary>' + section + '</details>'
+                    rendered += 1
+            body += '<small>Each action is one explicit call. Intake is optional; complete briefs can go straight to drafting. Only selected evidence is sent. Jobs run in the background without automatic retries.</small></section>'
     if jobs:
         body += '<section aria-live="polite"><div class="row"><h2>Model activity</h2><a href="/run/' + esc(rid) + '">Refresh status</a></div>'
         for job in jobs:
@@ -70,6 +94,10 @@ def render_status(status, csrf, model_enabled, planned=None, plan_error=None, *,
             if job['status'] in {'queued', 'running', 'cancel_requested'} and (job['actor'] == status['actor']['name'] or role == 'operator'):
                 body += form('/jobs/cancel', csrf, '', 'Cancel this job', {'id': job['id'], 'run_id': rid})
         body += '</section>'
+    efficiency = status.get('efficiency', {})
+    if efficiency.get('reserved_attempts') or efficiency.get('assistant_submissions'):
+        tokens = ('Unknown' if efficiency['input_tokens'] is None else str(efficiency['input_tokens']) + ' input / ' + str(efficiency['output_tokens']) + ' output')
+        body += '<section><h2>Requirement efficiency</h2><p>' + str(efficiency['attempts']) + ' finished direct attempts · ' + str(efficiency['unfinished_attempts']) + ' unfinished reservations · ' + str(efficiency['revisions']) + ' draft revisions · ' + str(efficiency['elapsed_seconds']) + ' seconds in finished attempts.</p><p>Reported tokens: ' + tokens + '. Cached input: ' + ('unknown' if efficiency['cached_input_tokens'] is None else str(efficiency['cached_input_tokens'])) + ' (' + str(efficiency['cache_measured_attempts']) + ' attempts reported cache usage).</p><small>Usage available for ' + str(efficiency['measured_attempts']) + ' / ' + str(efficiency['attempts']) + ' finished attempts, including failures. External assistant submissions: ' + str(efficiency['assistant_submissions']) + '. Questions asked: ' + str(efficiency['questions_asked']) + '; owner answers: ' + str(efficiency['owner_answers']) + '. Assistant conversation usage and price remain unknown.</small><details><summary>Totals by stage</summary><pre>' + esc(canonical(efficiency['by_stage'])) + '</pre></details></section>'
     if status.get('model_calls'):
         body += '<section><details><summary>Recorded inference measurements</summary><p>Reserved calls this cycle: ' + str(run['calls']) + ' / ' + str(status['context']['policy']['policy']['max_model_calls']) + '.</p>'
         for call in status['model_calls']:
@@ -138,7 +166,8 @@ def render_status(status, csrf, model_enabled, planned=None, plan_error=None, *,
         if run['state'] == 'approved' and approvals:
             body += make('seal', '', 'Seal and get approved handoff', {'approval_id': approvals[-1]})
         if run['state'] == 'exported' and approvals:
-            body += '<p><a href="/export/' + esc(rid) + '/' + str(approvals[-1]) + '">Get the sealed handoff again</a></p>'
+            export_path = '/export/' + esc(rid) + '/' + str(approvals[-1])
+            body += '<p><a class="button" href="' + export_path + '">Download handoff · 2 files</a></p><p><a href="' + export_path + '?file=requirement.md">Requirement</a> · <a href="' + export_path + '?file=acceptance.feature">Acceptance feature</a></p><details><summary>Full evidence and audit download</summary><p>The full sealed bundle includes source text, traceability, review and file hashes. These remain stored even when you download only the delivery files.</p><a href="' + export_path + '?audit=full">Download full private audit bundle</a></details>'
         body += '<details><summary>Authorize another refinement cycle</summary>' + make('cycle', field('reason', 'Reason for a new budgeted cycle', textarea=True), 'Authorize another cycle') + '</details>'
         body += '<details><summary>Resolve duplicate or out-of-scope questions</summary>' + make('resolve-question', field('question_id', 'Open question ID') + '<label>Resolution<select name="resolution"><option>merged</option><option>out_of_scope</option></select></label>' + '<label>Merge target (blank when out of scope)<input name="target"></label>' + field('reason', 'Confirmed scope decision or merge rationale', textarea=True), 'Record explicit question resolution') + '</details></section>'
     body += '<section><details><summary>Durable audit trail</summary><pre>' + esc(canonical(status['events'])) + '</pre></details></section>'
@@ -257,7 +286,7 @@ class Handler(BaseHTTPRequestHandler):
                 return self.respond(200, views.projects(actor, session['csrf'], policies))
             bits = path.strip('/').split('/')
             if len(bits) == 3 and bits[0] == 'run' and bits[2] == 'task.json':
-                task = host_bridge.packet(self.server.controller, token, bits[1])
+                task = host_bridge.packet(self.server.controller, token, bits[1], parse_qs(parts.query).get('stage', [None])[0])
                 return self.respond(200, canonical(task) + '\n', 'application/json', download=bits[1] + '-task.json')
             if len(bits) == 2 and bits[0] == 'run':
                 status = self.server.controller.status(token, bits[1])
@@ -272,7 +301,15 @@ class Handler(BaseHTTPRequestHandler):
                 return self.respond(200, render_status(status, session['csrf'], self.server.providers[stage] is not None, planned, error, models=w.records(token, 'model'), sources=w.records(token, 'source'), jobs=self.server.jobs.list(token, bits[1]), root=self.server.controller.root))
             if len(bits) == 3 and bits[0] == 'export':
                 bundle = self.server.controller.exported(token, bits[1], int(bits[2]))
-                return self.respond(200, archive(bundle), 'application/zip', download=bits[1] + '-handoff.zip')
+                query = parse_qs(parts.query)
+                if 'file' in query:
+                    name = query['file'][0]
+                    require(name in {'requirement.md', 'acceptance.feature'}, 'Choose a delivery file')
+                    # Validate the same sealed file hashes used by either archive.
+                    verify_bundle(bundle)
+                    return self.respond(200, bundle['files'][name], 'text/plain; charset=utf-8', download=name)
+                full = query.get('audit', [''])[0] == 'full'
+                return self.respond(200, archive(bundle, full_audit=full), 'application/zip', download=bits[1] + ('-audit.zip' if full else '-handoff.zip'))
             return self.respond(404, page('Not found', '<p>Unknown workspace route.</p>'))
         except (ValidationError, ValueError, KeyError, sqlite3.Error, OSError):
             self.respond(400, page('Request could not be completed', '<p>Check the capability, workspace state and request. No approval is implied by an error.</p>'))
@@ -315,7 +352,8 @@ class Handler(BaseHTTPRequestHandler):
                 data['enabled'] = boolean(data['enabled'])
                 if kind == 'model':
                     data['allow_cloud'] = boolean(data['allow_cloud'])
-                    for name in ('port', 'max_tokens', 'timeout', 'keep_alive'): data[name] = int(data[name])
+                    for name in ('port', 'max_tokens', 'timeout', 'keep_alive', 'context_tokens', 'intake_max_tokens', 'review_max_tokens', 'revise_max_tokens'):
+                        if name in data: data[name] = int(data[name])
                 w.save(token, kind, object_id, version, data, credential, clear_credential)
                 return self.respond(303, '', location='/settings')
             if path == '/settings/probe':
@@ -361,7 +399,7 @@ class Handler(BaseHTTPRequestHandler):
             elif action == 'resolve-question': c.resolve_question(token, rid, version, data['question_id'], data['resolution'], data['target'] or None, data['reason'])
             elif action == 'approve': c.approve(token, rid, version, data['plan_digest'], data['profile'])
             elif action in {'model', 'model-profile'}:
-                provider = w.provider(token, data['profile']) if action == 'model-profile' else self.server.providers.get(data['stage'])
+                provider = w.provider(token, data['profile'], data['stage']) if action == 'model-profile' else self.server.providers.get('draft' if data['stage'] in AUTHOR_STAGES else data['stage'])
                 require(provider is not None, 'This model stage is not configured')
                 self.server.jobs.start(token, rid, version, data['stage'], provider)
             elif action == 'seal':

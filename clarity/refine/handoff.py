@@ -42,14 +42,21 @@ def plan_files(run, current, context, assessed, profile):
     return {'plan': plan, 'plan_digest': digest(plan), 'files': files}
 
 
-def archive(bundle: dict) -> bytes:
+def verify_bundle(bundle: dict) -> None:
     require(bundle.get('kind') == 'approved-developer-handoff' and bundle.get('remote_published') is False, "Only a sealed handoff can be packaged")
     require(set(bundle['files']) == set(bundle['plan']['files']), "File manifest differs from the approved plan")
     for name, body in bundle['files'].items():
         require('/' not in name and '\\' not in name and name not in {'.', '..'}, "Unsafe export filename")
         require(hashlib.sha256(body.encode()).hexdigest() == bundle['plan']['files'][name], "Approved file hash mismatch")
     require(digest(bundle['plan']) == bundle['plan_digest'], "Plan integrity failure")
-    files = {**bundle['files'], 'manifest.json': canonical({k: v for k, v in bundle.items() if k != 'files'}) + '\n'}
+
+
+def archive(bundle: dict, *, full_audit=False) -> bytes:
+    verify_bundle(bundle)
+    # Both views derive from the same immutable approved bytes. A compact download
+    # never deletes evidence or changes the approval/sealed audit bundle.
+    files = ({**bundle['files'], 'manifest.json': canonical({k: v for k, v in bundle.items() if k != 'files'}) + '\n'}
+             if full_audit else {name: bundle['files'][name] for name in ('requirement.md', 'acceptance.feature')})
     out = io.BytesIO()
     with zipfile.ZipFile(out, 'w', compression=zipfile.ZIP_DEFLATED) as z:
         for name, body in sorted(files.items()):

@@ -13,6 +13,15 @@ from .guardrails import canonical, digest, identifier, ValidationError
 from .storage import transaction, private_path, write_private
 from .refine.contracts import fields, require, text
 from .refine.identity import authenticate
+from .efficiency import STAGES
+
+
+def model_settings(value):
+    """Add optional efficiency settings to older profiles without a DB migration."""
+    limit = value.get('max_tokens', 8192)
+    return {'context_tokens': 0, 'intake_max_tokens': min(limit, 1024) if type(limit) is int else 1024,
+            'review_max_tokens': value.get('max_tokens', 8192),
+            'revise_max_tokens': value.get('max_tokens', 8192), 'stage': 'any', 'cache_mode': 'provider', **value}
 
 DDL = (
     'CREATE TABLE workspace_meta(version INTEGER NOT NULL)',
@@ -68,7 +77,7 @@ class Workspace:
         require(kind in {'model', 'connection', 'source', 'check'}, 'Unknown configuration section')
         with transaction(self.root, write=False) as db:
             result = {}
-            for row in db.execute('SELECT * FROM workspace_records WHERE kind=? ORDER BY seq', (kind,)):
+            for row in db.execute('SELECT * FROM workspace_records WHERE seq IN (SELECT MAX(seq) FROM workspace_records WHERE kind=? GROUP BY id) ORDER BY seq', (kind,)):
                 data = json.loads(row['payload']); require(digest(data) == row['digest'], 'Workspace record integrity failure')
                 result[row['id']] = {**data, 'id': row['id'], 'version': row['seq']}
             for value in result.values():
@@ -100,11 +109,18 @@ class Workspace:
         who = self.actor(token, roles)
         value = json.loads(canonical(value))
         if kind == 'model':
-            fields(value, {'provider', 'model', 'port', 'max_tokens', 'timeout', 'keep_alive', 'allow_cloud', 'enabled'}, 'model configuration')
+            value = model_settings(value)
+            fields(value, {'provider', 'model', 'port', 'max_tokens', 'timeout', 'keep_alive', 'allow_cloud', 'enabled', 'context_tokens', 'intake_max_tokens', 'review_max_tokens', 'revise_max_tokens', 'stage', 'cache_mode'}, 'model configuration')
             require(value['provider'] in {'host-assistant', 'ollama', 'local-openai', 'openai', 'anthropic'}, 'Choose a supported model connection')
             text(value['model'], 'model or assistant name', 200)
             require(type(value['port']) is int and 1 <= value['port'] <= 65535, 'Invalid local model port')
             require(type(value['max_tokens']) is int and 256 <= value['max_tokens'] <= 16384, 'Output budget must be 256-16384 tokens')
+            for key in ('intake_max_tokens', 'review_max_tokens', 'revise_max_tokens'):
+                require(type(value[key]) is int and 256 <= value[key] <= 16384, 'Stage output budgets must be 256-16384 tokens')
+            require(type(value['context_tokens']) is int and (value['context_tokens'] == 0 or 1024 <= value['context_tokens'] <= 1048576), 'Context capacity must be 0 (unknown) or 1024-1048576 tokens')
+            require(isinstance(value['stage'], str) and value['stage'] in STAGES | {'any'}, 'Invalid model profile stage')
+            require(isinstance(value['cache_mode'], str) and value['cache_mode'] in {'provider', 'prefix'}, 'Invalid prompt cache mode')
+            require(value['cache_mode'] != 'prefix' or value['provider'] in {'openai', 'anthropic'}, 'Explicit prefix caching is supported only by selected cloud APIs')
             require(type(value['timeout']) is int and 5 <= value['timeout'] <= 120, 'Timeout must be 5-120 seconds')
             require(type(value['keep_alive']) is int and 0 <= value['keep_alive'] <= 600, 'Keep-alive must be 0-600 seconds')
             require(type(value['allow_cloud']) is bool and type(value['enabled']) is bool, 'Invalid model switches')
@@ -169,22 +185,28 @@ class Workspace:
         self.save(token, 'check', check_id, 0, {'connection': connection_id, 'connection_version': version, 'status': state, 'message': message, 'checked_at': time.time()})
         return check_id
 
-    def provider(self, token, connection_id):
+    def provider(self, token, connection_id, stage=None):
         value, _ = self.get(token, 'model', connection_id)
+        value = model_settings(value)
         require(value['enabled'], 'Model connection is disabled')
-        common = {'timeout': value['timeout'], 'max_tokens': value['max_tokens']}
+        require(stage is None or stage in STAGES, 'Unknown model stage')
+        require(stage is None or value['stage'] in {'any', stage}, 'Choose a model profile configured for this stage')
+        common = {'timeout': value['timeout'], 'max_tokens': value.get(str(stage) + '_max_tokens', value['max_tokens'])}
         kind = value['provider']
         if kind == 'host-assistant':
             raise ValidationError('Use the host-assistant task/MCP bridge for Copilot, Codex or Claude Code')
         if kind == 'ollama':
             from .refine.worker import Ollama
-            return Ollama(value['model'], port=value['port'], keep_alive=value['keep_alive'], **common)
-        if kind == 'local-openai':
+            provider = Ollama(value['model'], port=value['port'], keep_alive=value['keep_alive'], **common)
+        elif kind == 'local-openai':
             from .local_model import LocalModel
-            return LocalModel(value['model'], port=value['port'], key=self.secret(value.get('secret_id')), **common)
-        require(value['allow_cloud'], 'Cloud sharing permission is disabled')
-        from .connections import CloudModel
-        return CloudModel(kind, value['model'], self.secret(value.get('secret_id')), **common)
+            provider = LocalModel(value['model'], port=value['port'], key=self.secret(value.get('secret_id')), **common)
+        else:
+            require(value['allow_cloud'], 'Cloud sharing permission is disabled')
+            from .connections import CloudModel
+            provider = CloudModel(kind, value['model'], self.secret(value.get('secret_id')), cache_mode=value['cache_mode'], **common)
+        provider.context_tokens = value['context_tokens']
+        return provider
 
     def import_source(self, token, connection_id, item, project):
         self.actor(token, {'author', 'operator'})

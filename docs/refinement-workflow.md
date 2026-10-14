@@ -40,6 +40,14 @@ as references; they are not all automatically invoked.
    Resolve duplicates or scope exclusions explicitly; unanswered facts are not assumed.
 5. Return to the author role and draft again using the updated context.
 
+For an existing draft, **Revise changed items only** returns a digest-bound edit.
+Clarity assembles the full draft locally and requires a fresh independent review.
+Use the complete-draft action for a larger rewrite. **Check missing decisions only**
+is optional: it produces questions or intake advice, never a requirement or approval.
+Complete briefs can go straight to drafting without this extra call. Profiles can
+be restricted to one stage and have separate output limits; no model is selected
+or escalated automatically. Inspect the estimated context budgets before running.
+
 A useful example-mapping session starts with the agreed rule, then asks for one
 ordinary example, a refusal/exception, an exact boundary and an alternative path.
 Use the question form for any missing business decision. The draft's coverage table
@@ -60,7 +68,11 @@ return the requirement for revision. A writer's self-assessment is not an indepe
 As operator, select Cucumber, Xray Cloud or Xray Server/DC and inspect the exact
 proposed files. Approve that handoff, then **Seal and get approved handoff** within
 15 minutes. A changed source, answer, policy or review requires fresh approval.
-Sealed exports remain immutable, and repeat downloads return the stored bundle.
+Sealed exports remain immutable. The default download contains two delivery files:
+`requirement.md` and `acceptance.feature`. Individual downloads are also available.
+Open **Full evidence and audit download** for the source text, traceability,
+review and manifest. Both views use the same approved bytes; neither generates
+additional model output or deletes the audit history.
 
 ## Background model jobs
 
@@ -73,6 +85,8 @@ instead. Closing the application never silently retries an interrupted job.
 Oversized or credential-like input fails before reserving a model attempt. Once an
 attempt is reserved, provider failure, timeout or cancellation still counts against
 the cycle budget. An operator may explicitly authorize another cycle with a reason.
+Configured token-budget and exhausted-rewrite preflight failures also avoid a model
+call. The [efficiency guide](efficiency.md) explains estimates and reported usage.
 
 For automation of this local workflow, the lower-level commands remain available:
 

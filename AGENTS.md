@@ -89,11 +89,15 @@ Never delete legitimate source language just to evade a detector.
 ## Runtime and local UI
 
 Ten specialist role profiles remain available. The optional executable model path
-uses bounded drafting/questioning and independent-review calls; it is not an
+uses bounded drafting/questioning and independent-review calls, with optional
+intake-only and digest-bound targeted-revision actions; it is not an
 unrestricted autonomous invocation of all ten agents. Direct model calls receive selected data
 and output contracts only, not credentials or tool access. The scoped stdio MCP
 bridge lets Copilot, Codex and Claude Code retrieve a task and submit a structured
-author/reviewer result for one requirement; it exposes no operator tool. A coding
+author/reviewer result for one requirement, with diagnostics available on demand;
+it exposes no operator tool. Targeted edits are assembled and validated as a full
+new draft and always require a fresh independent review. Intake readiness is only
+advice, never an approved requirement. A coding
 assistant is not OS-sandboxed by this bridge, so restrict its other file/tool access. Attempts are durably
 reserved before inference, bounded, and not retried automatically. Errors and
 interruption do not imply a completed draft, review, approval or export.
@@ -118,6 +122,10 @@ that Xray tests, Jira issues or automated step definitions were created. Import 
 the feature file into a selected test-management instance, not private evidence.
 Do not infer tracker keys, links or edition-specific behavior.
 
+Default delivery contains requirement.md and the exact acceptance.feature only.
+The full sealed evidence/review/manifest bundle remains stored and available as
+an explicit audit download. Neither view calls a model or deletes audit records.
+
 Use optimistic versions and immutable records. Keep controller state and keys
 outside agent access. The capability model is for one trusted local workspace,
 not enterprise identity or a sandbox against its OS owner. No automatic deletion,
@@ -132,3 +140,9 @@ must not omit missing outputs. Human-labelled blind developer/tester reviews,
 repeated model trials, useful questions, unsupported claims, missed decisions,
 false blocks, correction effort and time/cost remain the acceptance evidence for
 model/prompt changes. Never trade the handoff standard for a higher READY rate.
+Use compact task projections and native schema fields without duplicate prompt
+schemas. Preserve all selected evidence, source authority and mandatory review
+criteria. Token-budget estimates are labelled estimates; missing provider/client
+usage and prices remain unknown. Display caches may reuse deterministic results
+only for identical complete inputs and implementation versions; approval, review
+and sealing must rerun their authoritative checks.
