@@ -39,7 +39,10 @@ jobs:
       - run: python -m clarity lint examples/checklist-requirement.json
       - run: python -m clarity benchmark examples/rule-benchmark.json
       - run: python -m clarity gate examples/complete-report.json
-      - run: python -m clarity check-repo
+      - name: Scan tracked source in the checked-out workspace
+        run: >-
+          GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=safe.directory
+          GIT_CONFIG_VALUE_0="$GITHUB_WORKSPACE" python -m clarity check-repo
       - name: Install pinned build tools
         run: >-
           python -m pip install --require-hashes --only-binary=:all: -r requirements-build.lock
