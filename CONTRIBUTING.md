@@ -30,3 +30,12 @@ for authority, stale context, output validation and recovery boundaries.
 No merge, public deployment, remote tracker write or automatic retention deletion
 is part of a local implementation change. Record actual validation and any remaining
 live-model/client qualification in the PR.
+
+## CI runner
+
+Core and browser CI target `[self-hosted, Linux, X64, host:r720-ai]` and use
+disposable Python Bookworm containers. Core checks retain Python 3.11 and 3.13;
+browser checks use Python 3.12. The runner needs Docker and repository access.
+Jobs run for main-branch pushes and same-repository pull requests. Branch pushes
+with an open PR do not duplicate the PR checks, and fork PRs do not execute on
+the personal runner. No GitHub-hosted fallback consumes hosted Actions minutes.
