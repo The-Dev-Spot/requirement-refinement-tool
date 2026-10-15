@@ -73,11 +73,17 @@ Import only **acceptance.feature** into test management. The full audit ZIP cont
 selected evidence. Cucumber, Xray Cloud and Xray Server/DC profiles are local export choices;
 no tracker write or verified live import is implied. See [the Xray pilot](docs/xray-pilot.md).
 
+Optional [project collaboration tools](docs/project-collaboration.md) add approved,
+versioned glossaries, focused stakeholder questionnaires and a portable view of an
+already sealed handoff. These are local CLI operations; no development pipeline is
+required or automatically started.
+
 ## Guides
 
 - [First run and daily use](docs/refinement-workflow.md)
 - [Assistant connections](docs/assistants.md) and [local/cloud model setup](docs/models.md)
 - [Efficient model use, smaller handoffs and usage measurements](docs/efficiency.md)
+- [Project glossaries, stakeholder questionnaires and portable handoffs](docs/project-collaboration.md)
 - [Source management](docs/sources.md), [backup and recovery](docs/recovery.md), [troubleshooting](docs/troubleshooting.md)
 - [Handoff standard](docs/handoff-standard.md), [operating contract](AGENTS.md), [security](SECURITY.md)
 - [Quality evaluation](docs/evaluation.md), [architecture](docs/architecture.md), [remaining qualification](docs/roadmap.md)
