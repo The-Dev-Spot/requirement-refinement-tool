@@ -99,5 +99,6 @@ def scorecard(calls, run, events):
             'assistant_submissions': sum(e['kind'] == 'assistant_submission' for e in events),
             'questions_asked': sum(e['kind'] == 'question' for e in events),
             'owner_answers': sum(e['kind'] == 'answer' for e in events),
+            'pending_responses': sum(e['kind'] == 'question_response' for e in events),
             'by_stage': stages, 'cost': None,
             'usage_scope': 'Provider-reported direct calls only; assistant conversation usage and unreported tokens are unknown.'}

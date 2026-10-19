@@ -39,7 +39,7 @@ def main(argv=None):
         elif name == 'portable':
             cmd.add_argument('--approval', type=int, required=True); cmd.add_argument('--output', type=Path, required=True)
         elif name == 'action':
-            cmd.add_argument('action', choices=['submit', 'review', 'ask', 'answer', 'source', 'confirm-source', 'approve', 'resolve-signal', 'resolve-question', 'new-cycle'])
+            cmd.add_argument('action', choices=['submit', 'review', 'ask', 'answer', 'source', 'confirm-source', 'approve', 'resolve-signal', 'resolve-question', 'exclude-response-history', 'new-cycle'])
             cmd.add_argument('--version', type=int, required=True); cmd.add_argument('--input', type=Path, required=True)
         elif name == 'stage':
             cmd.add_argument('stage', choices=['intake', 'draft', 'revise', 'review']); cmd.add_argument('--version', type=int, required=True); cmd.add_argument('--model', required=True); cmd.add_argument('--ollama-port', type=int, default=11434)
@@ -132,6 +132,7 @@ def main(argv=None):
             elif args.action == 'approve': result = c.approve(*common, **data)
             elif args.action == 'resolve-signal': result = c.resolve_signal(*common, **data)
             elif args.action == 'resolve-question': result = c.resolve_question(*common, **data)
+            elif args.action == 'exclude-response-history': result = c.exclude_response_history(*common, **data)
             else: result = c.new_cycle(*common, **data)
         print(json.dumps(result, indent=2))
         return 0

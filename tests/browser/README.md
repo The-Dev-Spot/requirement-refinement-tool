@@ -3,6 +3,9 @@
 These tests submit rendered login, capture, model setup, source-file and logout forms in Chromium, and check a narrow responsive viewport.
 They also save stage limits, inspect the pre-run context budget, and run an optional
 intake against a synthetic provider to verify that it never creates a draft.
+The decision journey records partial and unknown responses, checks prerequisite
+ordering, confirms decisions and reopens a dependent answer after its prerequisite
+changes. It verifies that a response type must be selected explicitly.
 They do not set Origin or other browser-generated request headers manually.
 The fixture uses a disposable loopback workspace and synthetic keys; no model,
 external tracker, real credentials or existing workspace is used.
@@ -23,6 +26,11 @@ python -m pip install --require-hashes --only-binary=:all: -r requirements.lock 
 python -m playwright install --with-deps --only-shell chromium
 python -m unittest discover -s tests/browser -v
 ```
+
+For a separately installed compatible Chromium executable, set
+`CLARITY_BROWSER_EXECUTABLE` to its absolute path. The override must launch
+successfully; it does not skip tests. CI uses the pinned Playwright browser by
+default. Record the actual browser version when qualifying an alternate executable.
 
 The browser dependency lock targets CPython 3.12 on glibc-based Linux x86_64. Runtime
 requirements remain in requirements.lock; browser dependencies are development

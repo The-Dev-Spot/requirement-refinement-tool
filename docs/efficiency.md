@@ -9,7 +9,7 @@ then approve and seal. Optional stages help when needed; they never run automati
 | --- | --- | --- |
 | Complete draft | A new brief or substantial rewrite | Questions or a full draft |
 | Targeted revision | Corrections to an existing draft | Questions or changed items only |
-| Intake questions | An early check of missing business decisions | Questions or advisory readiness to draft |
+| Intake questions | An early check or reconsideration of pending business decisions | New questions or advice that drafting can begin/decisions are still needed |
 | Independent review | Checking the complete current draft | Every required statement, scenario and semantic assessment |
 
 Targeted revision preserves unchanged text and IDs. Null title/feature/proposals
@@ -20,8 +20,18 @@ workflow version and current context must match. Unknown removals, duplicate edi
 and no-op revisions are rejected. The controller validates the assembled full draft;
 an edit cannot waive a finding or reuse the previous independent review/approval.
 
-Resolve pending owner decisions before another model call. Batch related answers
-before resuming. Select relevant original source excerpts with their applicability;
+Resolve pending owner decisions before a draft or revision call. An explicitly
+requested intake call can reconsider pending decisions and propose necessary new
+follow-ups. If current open questions already cover the gaps, it can return no new
+questions with `ready_to_draft=false`; waiting for decisions is not intake readiness.
+Partial, unknown, proposal and needs-owner responses remain open and cannot become
+authoritative sources. Changing a prerequisite may require dependent answers to be
+reconfirmed before drafting resumes.
+
+Settle foundational decisions first; batch independent decisions when useful. Do not
+spend another call merely to restate an unanswered question. Every intake run consumes
+the same bounded call budget, with no automatic continuation or separate interviews
+for each PO role. Select relevant original source excerpts with their applicability;
 never replace authoritative evidence with an unverified generated summary.
 
 ## Configure models and limits
@@ -54,8 +64,11 @@ need their own context configuration. Larger windows can consume more memory.
 
 Direct transports put the output schema in the native API field once. They do not
 repeat it in the prompt. Assistant task packets retain one schema because clients
-need the contract. The original request appears once as source BRIEF. Prompts retain
-all selected evidence, decisions, authority and policy, the exact feature and all
+need the contract. The installed shared PO clarification instructions appear once
+per author task, rather than repeating all three specialist profiles. Independent
+review keeps its separate assessment contract. The original request appears once as
+source BRIEF. Prompts retain all selected evidence, decisions, authority and policy,
+the exact feature and all
 required review criteria. They omit expanded validation examples already represented
 by the feature, repeated machine results in review feedback and illustrative schemas
 that duplicate the actual schema. Reviewers never receive the writer's previous verdict.

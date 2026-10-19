@@ -21,7 +21,8 @@ DRAFT = obj(
     scenarios=arr(obj(id=STRING, statement_ids=arr(STRING), category={'type': 'string', 'enum': list(CATEGORIES)})),
     coverage=arr(obj(statement_id=STRING, category={'type': 'string', 'enum': list(CATEGORIES)}, scenario_ids=arr(STRING), not_applicable_reason=NULLABLE)),
     proposals=arr(STRING))
-QUESTIONS = arr(obj(id=STRING, text=STRING, why=STRING, impact={'type': 'integer'}))
+QUESTIONS = arr(obj(id=STRING, text=STRING, why=STRING, impact={'type': 'integer'},
+                    prerequisites=arr(STRING)))
 
 
 def changes(item, removal=STRING):

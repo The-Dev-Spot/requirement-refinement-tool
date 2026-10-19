@@ -50,13 +50,26 @@ versioned policy register. Drafts cannot redefine the register they are checked
 against. Source, answer, policy or quality-rule changes invalidate the prior
 context and require a fresh draft and independent review. Superseded answers
 remain in the audit history but cannot support current claims.
+An operator may explicitly exclude an exact earlier response from future model
+context with a recorded rationale. Its original audit record remains; this cannot
+exclude a current answer or decision source and requires fresh drafting and review.
 
 Ask plain-language, decision-focused questions, showing why each changes the
 business outcome or acceptance scenarios. Investigate before re-asking information
-already present. Rank by material consequence, not curiosity. Stable question IDs
-cannot be reused for different questions. Only an operator may answer or explicitly
-merge/remove a question from confirmed scope. Merges preserve the target and
-cannot form cycles. Ending an interview is not proof of completeness.
+already present. Apply `.github/skills/po-clarification/SKILL.md` as the shared
+Analyst/Challenger/Responder contract, using one question and decision history.
+Resolve prerequisite decisions before dependent questions; rank eligible questions
+by material consequence. Stable question IDs cannot be reused for different
+questions. Only an operator may answer or explicitly merge/remove a question from
+confirmed scope. Merges preserve the target and cannot form cycles.
+
+An operator records each response as confirmed, partial, unknown, proposal or
+needs_owner. Only confirmed answers become authoritative decision sources; all
+other responses preserve the open decision. A supplied decision-owner label does
+not grant identity or authority. Check the meaning and completeness of answers even
+when marked confirmed. Changed prerequisites reopen affected confirmed descendants
+for reconfirmation, retaining their history. Ending an interview is not proof of
+completeness; uncertainty cannot be converted into READY by recording an answer.
 
 ## Handoff and review
 
@@ -97,7 +110,11 @@ bridge lets Copilot, Codex and Claude Code retrieve a task and submit a structur
 author/reviewer result for one requirement, with diagnostics available on demand;
 it exposes no operator tool. Targeted edits are assembled and validated as a full
 new draft and always require a fresh independent review. Intake readiness is only
-advice, never an approved requirement. A coding
+advice, never an approved requirement. An explicit intake call may reassess pending
+decisions and propose necessary new follow-ups within the existing call budget;
+it cannot resolve existing questions. Draft/revise calls stay blocked while any
+decision remains open. The shared PO contract is packaged once per author task,
+without three separate interviews or automatic follow-up calls. A coding
 assistant is not OS-sandboxed by this bridge, so restrict its other file/tool access. Attempts are durably
 reserved before inference, bounded, and not retried automatically. Errors and
 interruption do not imply a completed draft, review, approval or export.

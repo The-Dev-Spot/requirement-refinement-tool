@@ -1,15 +1,15 @@
-"""Optional dependency-aware questionnaires. Answers still go through the operator."""
+"""Question dependencies for live decisions and optional questionnaires."""
 from __future__ import annotations
 
 from .contracts import require, text
 
 
-def question_order(questions: dict, dependencies: dict | None = None) -> list[dict]:
-    """Topologically order questions, retaining impact ordering within each frontier.
+def question_dependencies(questions: dict, dependencies: dict | None = None) -> dict[str, set[str]]:
+    """Validate persisted prerequisites, with optional per-question export overrides.
 
-    Dependencies are an explicit proposal, not permission to resolve a question.
-    Merged questions follow their current target; out-of-scope/answered questions
-    satisfy ordering only. The controller remains the authority on completeness.
+    Merged questions retain their prerequisites on the surviving target. Validate
+    the whole graph, including answered nodes; a disposition cannot hide a cycle.
+    The optional map changes this projection only, never the stored questions.
     """
     dependencies = {} if dependencies is None else dependencies
     require(isinstance(dependencies, dict) and set(dependencies) <= set(questions), 'Unknown dependency owner')
@@ -24,7 +24,8 @@ def question_order(questions: dict, dependencies: dict | None = None) -> list[di
         return qid
 
     edges = {qid: set() for qid in questions}
-    for qid, prerequisites in dependencies.items():
+    for qid, question in questions.items():
+        prerequisites = dependencies.get(qid, question.get('prerequisites', []))
         require(isinstance(prerequisites, list) and len(prerequisites) <= 100
                 and all(isinstance(p, str) and p in questions for p in prerequisites), 'Unknown prerequisite question')
         require(len(set(prerequisites)) == len(prerequisites), 'Duplicate prerequisite question')
@@ -41,6 +42,36 @@ def question_order(questions: dict, dependencies: dict | None = None) -> list[di
         require(bool(ready), 'Question dependencies contain a cycle')
         remaining -= ready
         done |= ready
+    return edges
+
+
+def ready_questions(questions: dict) -> list[dict]:
+    """Return only decisions whose effective prerequisites are resolved now."""
+    edges = question_dependencies(questions)
+    resolved = {qid for qid, q in questions.items() if q['state'] in {'answered', 'out_of_scope'}}
+    return sorted(({**q, 'prerequisites': sorted(edges[qid])}
+                   for qid, q in questions.items() if q['state'] == 'open' and edges[qid] <= resolved),
+                  key=lambda q: (-q['impact'], q['id']))
+
+
+def dependent_questions(questions: dict, question_id: str) -> list[str]:
+    """Find current canonical descendants for operator-triggered invalidation."""
+    edges = question_dependencies(questions)
+    found, frontier = set(), {question_id}
+    while frontier:
+        following = {qid for qid, prerequisites in edges.items() if prerequisites & frontier} - found
+        found.update(following)
+        frontier = following
+    return sorted(found)
+
+
+def question_order(questions: dict, dependencies: dict | None = None) -> list[dict]:
+    """Plan all open questions in dependency order for an exported questionnaire.
+
+    This projection includes future frontiers, unlike the live ready_questions.
+    Ordering a later question is never permission to confirm it prematurely.
+    """
+    edges = question_dependencies(questions, dependencies)
     pending = {qid for qid, q in questions.items() if q['state'] == 'open'}
     done = set(questions) - pending
     ordered = []
