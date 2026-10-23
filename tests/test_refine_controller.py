@@ -220,6 +220,8 @@ class HandoffTests(Fixture):
         data = archive(bundle)
         with zipfile.ZipFile(io.BytesIO(data)) as z:
             self.assertEqual(z.read('acceptance.feature'), original['feature'].encode())
+            self.assertEqual(set(z.namelist()), {'requirement.md', 'acceptance.feature'})
+        with zipfile.ZipFile(io.BytesIO(archive(bundle, full_audit=True))) as z:
             self.assertEqual(len(z.namelist()), 7)
         self.assertEqual(data, archive(self.c.seal(self.o, 'REQ1', approved['approval_id'])))
 

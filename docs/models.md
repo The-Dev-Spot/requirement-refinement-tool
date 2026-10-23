@@ -15,10 +15,13 @@ actual listening port. An optional Bearer key is supported for the local OpenAI-
 serve it with one of these protocols; unsupported custom protocols need an adapter.
 A local proxy can forward remotely, so verify the server's data handling yourself.
 
-Set the output budget (256–16384 tokens), timeout (5–120 seconds), and Ollama
-keep-alive (0–600 seconds). Large requirements may need a larger output budget,
-but context remains bounded to 200 KB per selected model packet. Capture smaller
-excerpts rather than dumping an entire knowledge base into the request.
+Set the draft output budget (256–16384 tokens), timeout (5–120 seconds), and Ollama
+keep-alive (0–600 seconds). Optional efficiency settings add intake/revision/review
+output limits, a stage restriction and the server's configured context capacity.
+The pre-run estimate reserves output space and blocks estimated over-budget calls
+before reservation. Capacity 0 means unknown; estimates never claim tokenizer accuracy.
+The 200 KB task-packet cap still applies. Capture relevant original excerpts rather
+than dumping an entire knowledge base into the request. See [efficiency](efficiency.md).
 
 Save the profile, then **Test structured output**. The test sends a fixed synthetic
 request. Passing shows that this request worked at that time. It does not certify

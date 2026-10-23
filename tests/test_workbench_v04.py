@@ -122,7 +122,8 @@ class BridgeTests(Fixture):
         messages = [{'jsonrpc': '2.0', 'id': 1, 'method': 'initialize', 'params': {'protocolVersion': '2025-11-25'}}, {'jsonrpc': '2.0', 'id': 2, 'method': 'tools/list'}]
         out = io.StringIO(); serve(self.root, path, 'REQ1', io.StringIO('\n'.join(map(json.dumps, messages))), out)
         tools = json.loads(out.getvalue().splitlines()[1])['result']['tools']
-        self.assertEqual([t['name'] for t in tools], ['clarity_get_task', 'clarity_submit_result'])
+        self.assertEqual([t['name'] for t in tools], ['clarity_get_task', 'clarity_get_findings', 'clarity_submit_result'])
+        self.assertTrue(tools[1]['annotations']['readOnlyHint'])
         with self.assertRaises(ValidationError): packet(self.c, self.o, 'REQ1')
 
     def test_stale_policy_rejects_assistant_result_atomically(self):

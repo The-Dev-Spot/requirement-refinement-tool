@@ -3,6 +3,7 @@ import argparse
 import csv
 import json
 import statistics
+import math
 from pathlib import Path
 from .guardrails import canonical, digest, load_json, identifier, ValidationError
 from .refine.contracts import require, draft, review, DEFAULT_POLICY, fields, text
@@ -24,6 +25,13 @@ def evaluate(corpus, runs, trials=3):
             supplied = index.get((case['id'], trial))
             row = {'case_id': case['id'], 'need_id': case['need_id'], 'style': case['input_style'], 'trial': trial, 'missing': supplied is None, 'contract_passed': False}
             if supplied:
+                # Failed/invalid outputs still cost time and tokens. Capture their
+                # bounded measurements independently of contract validation.
+                metrics = supplied.get('metrics', {})
+                if isinstance(metrics, dict):
+                    for name in ('elapsed_seconds', 'input_tokens', 'output_tokens', 'cached_input_tokens', 'model_calls', 'revisions', 'correction_minutes'):
+                        metric = metrics.get(name)
+                        if type(metric) in (int, float) and 0 <= metric < 10**10: row[name] = metric
                 try:
                     result = supplied['result']
                     if result.get('questions'):
@@ -46,10 +54,6 @@ def evaluate(corpus, runs, trials=3):
                         blockers = [f for f in checked['findings'] if f['severity'] != 'warning' or f['id'] not in resolved]
                         failed = [v for section in ('checks', 'statement_support', 'scenario_fidelity') for v in assessment[section].values() if v['status'] != 'PASS']
                         row.update(contract_passed=not blockers and not failed and not assessment['ambiguities'], outcome='draft')
-                    metrics = supplied.get('metrics', {})
-                    for name in ('elapsed_seconds', 'input_tokens', 'output_tokens', 'correction_minutes'):
-                        metric = metrics.get(name)
-                        if type(metric) in (int, float) and 0 <= metric < 10**10: row[name] = metric
                 except (ValidationError, KeyError, TypeError, ValueError): row['invalid'] = True
             rows.append(row)
             group = groups.setdefault(case['input_style'], {'expected': 0, 'provided': 0, 'contract_passed': 0})
@@ -59,6 +63,13 @@ def evaluate(corpus, runs, trials=3):
         values = [r['elapsed_seconds'] for r in rows if r['style'] == style and 'elapsed_seconds' in r]
         group['median_elapsed_seconds'] = statistics.median(values) if values else None
         group['latency_samples'] = len(values)
+        group['p95_elapsed_seconds'] = sorted(values)[math.ceil(len(values)*.95)-1] if values else None
+        group['handoff_contract_passed'] = sum(r['style'] == style and r.get('outcome') == 'draft' and r['contract_passed'] for r in rows)
+        group['efficiency'] = {}
+        for name in ('input_tokens', 'output_tokens', 'cached_input_tokens', 'model_calls', 'revisions', 'correction_minutes'):
+            samples = [r[name] for r in rows if r['style'] == style and name in r]
+            group['efficiency'][name] = {'samples': len(samples), 'total': sum(samples) if samples else None,
+                                         'median': statistics.median(samples) if samples else None}
     return {'groups': groups, 'trials': rows, 'label_status': corpus['label_status'], 'semantic_accuracy_measured': False, 'experience_invariance_proven': False,
             'human_review_required': ['intent and scope', 'unsupported claims', 'missed material decisions', 'useful questions', 'false blocks', 'scenario sufficiency', 'correction effort'],
             'limitations': 'Contract pass is not semantic correctness. A question response is not a handoff. Human labels require independent ratification; no live run is fabricated.'}

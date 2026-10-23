@@ -40,6 +40,16 @@ and separates input styles. It reports contract pass rate and observed latency
 samples. A valid question response is an intermediate outcome, not a ready handoff.
 No cost is guessed when usage/price evidence is absent.
 
+Each style also reports p95 latency and sample counts, totals and medians for
+reported input/output/cached tokens, model calls, revisions and correction minutes.
+Metrics from invalid outputs remain in the report: failed work still consumes resources.
+Absent measurements stay unknown. Record the **whole requirement's** usage, including
+failed attempts and intermediate calls, rather than only its last successful call.
+Use `clarity efficiency` for direct-call totals and separately record assistant-client
+usage when available. Compare trials on completed handoffs and semantic ratings;
+an intake advice result or small partial edit is not a final quality result. Assemble
+targeted edits into the full draft before supplying the evaluation output.
+
 ## Blind review
 
 Give reviewers the `B-*.json` packets and `ratings.csv`; retain

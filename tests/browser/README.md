@@ -1,11 +1,13 @@
 # Workbench browser regression
 
 These tests submit rendered login, capture, model setup, source-file and logout forms in Chromium, and check a narrow responsive viewport.
+They also save stage limits, inspect the pre-run context budget, and run an optional
+intake against a synthetic provider to verify that it never creates a draft.
 They do not set Origin or other browser-generated request headers manually.
 The fixture uses a disposable loopback workspace and synthetic keys; no model,
 external tracker, real credentials or existing workspace is used.
 
-Both CI workflows run on the self-hosted `host:r720-ai` Linux x64 runner.
+Both CI workflows run on GitHub-hosted `ubuntu-latest` runners.
 Python 3.11/3.13 core jobs and Python 3.12 browser checks use disposable Debian
 Bookworm Python containers, so interpreter/browser packages stay within the job.
 The runner must be available to this repository and have Docker installed.

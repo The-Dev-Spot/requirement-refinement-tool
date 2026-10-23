@@ -11,14 +11,13 @@ concurrency:
 jobs:
   test:
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: [self-hosted, Linux, X64, 'host:r720-ai']
+    runs-on: ubuntu-latest
     timeout-minutes: 20
     container:
       image: python:${{ matrix.python }}-bookworm
       options: --cpus 2
     strategy:
       fail-fast: false
-      max-parallel: 1
       matrix:
         python: ['3.11', '3.13']
     steps:

@@ -24,20 +24,38 @@ def main(argv=None):
     serve = sub.add_parser('serve')
     serve.add_argument('--port', type=int, default=8765)
     serve.add_argument('--model'); serve.add_argument('--review-model'); serve.add_argument('--ollama-port', type=int, default=11434)
-    for name in ('capture', 'status', 'plan', 'seal', 'verify', 'action', 'stage', 'policy'):
+    project_commands = {'glossary', 'approve-glossary'}
+    for name in ('capture', 'status', 'plan', 'seal', 'verify', 'action', 'stage', 'policy',
+                 'portable', 'glossary', 'approve-glossary', 'attach-glossary', 'questionnaire'):
         cmd = sub.add_parser(name)
         cmd.add_argument('--key-file', type=Path, required=True)
-        if name != 'policy': cmd.add_argument('--id', required=True)
+        if name not in project_commands | {'policy'}: cmd.add_argument('--id', required=True)
         if name == 'capture':
             cmd.add_argument('--project', required=True); cmd.add_argument('--brief-file', type=Path, required=True); cmd.add_argument('--presentation', choices=['guided', 'concise'], default='guided')
         elif name == 'plan': cmd.add_argument('--profile', choices=['cucumber', 'xray-cloud', 'xray-server-dc'], default='cucumber')
-        elif name == 'seal': cmd.add_argument('--approval', type=int, required=True); cmd.add_argument('--output', type=Path, required=True)
+        elif name == 'seal':
+            cmd.add_argument('--approval', type=int, required=True); cmd.add_argument('--output', type=Path, required=True)
+            cmd.add_argument('--full-audit', action='store_true', help='Include private evidence, traceability, review and manifest; default is the two delivery files')
+        elif name == 'portable':
+            cmd.add_argument('--approval', type=int, required=True); cmd.add_argument('--output', type=Path, required=True)
         elif name == 'action':
             cmd.add_argument('action', choices=['submit', 'review', 'ask', 'answer', 'source', 'confirm-source', 'approve', 'resolve-signal', 'resolve-question', 'new-cycle'])
             cmd.add_argument('--version', type=int, required=True); cmd.add_argument('--input', type=Path, required=True)
         elif name == 'stage':
-            cmd.add_argument('stage', choices=['draft', 'review']); cmd.add_argument('--version', type=int, required=True); cmd.add_argument('--model', required=True); cmd.add_argument('--ollama-port', type=int, default=11434)
+            cmd.add_argument('stage', choices=['intake', 'draft', 'revise', 'review']); cmd.add_argument('--version', type=int, required=True); cmd.add_argument('--model', required=True); cmd.add_argument('--ollama-port', type=int, default=11434)
         elif name == 'policy': cmd.add_argument('--project', required=True); cmd.add_argument('--input', type=Path, required=True)
+        elif name in project_commands:
+            cmd.add_argument('--project', required=True)
+            if name == 'glossary': cmd.add_argument('--record', type=int)
+            else:
+                cmd.add_argument('--expected-record', type=int, required=True); cmd.add_argument('--input', type=Path, required=True)
+        elif name == 'attach-glossary':
+            cmd.add_argument('--version', type=int, required=True); cmd.add_argument('--record', type=int, required=True)
+            cmd.add_argument('--digest', required=True); cmd.add_argument('--replace-source')
+        elif name == 'questionnaire':
+            cmd.add_argument('--recipient', required=True); cmd.add_argument('--purpose', required=True)
+            cmd.add_argument('--questions', nargs='+', required=True); cmd.add_argument('--dependencies', type=Path)
+            cmd.add_argument('--output', type=Path, required=True)
     args = parser.parse_args(argv)
     try:
         if args.command == 'init':
@@ -64,7 +82,7 @@ def main(argv=None):
         require(args.key_file.stat().st_size < 256, 'Invalid capability file')
         token = args.key_file.read_text().strip()
         c = Controller(args.state)
-        if args.command in {'action', 'policy'}:
+        if args.command in {'action', 'policy', 'approve-glossary'}:
             require(not args.input.is_symlink() and args.input.stat().st_size <= 1_000_000, 'Input is unsafe or too large')
             data = load_json(args.input)
         if args.command == 'capture':
@@ -75,8 +93,29 @@ def main(argv=None):
         elif args.command == 'verify': result = c.verify(token, args.id)
         elif args.command == 'seal':
             result = c.seal(token, args.id, args.approval)
-            write_private(args.output, archive(result))
+            write_private(args.output, archive(result, full_audit=args.full_audit))
             print('Approved local handoff written. Nothing was uploaded to a tracker.')
+            return 0
+        elif args.command == 'portable':
+            from .portable import portable_archive
+            write_private(args.output, portable_archive(c.exported(token, args.id, args.approval)))
+            print('Portable view of the sealed handoff written. No private source bundle or execution authority was exported.')
+            return 0
+        elif args.command in project_commands | {'attach-glossary'}:
+            from .project_tools import ProjectTools
+            tools = ProjectTools(args.state)
+            if args.command == 'glossary': result = tools.glossary(token, args.project, args.record)
+            elif args.command == 'approve-glossary': result = tools.approve_glossary(token, args.project, data, args.expected_record)
+            else: result = tools.attach_glossary(token, args.id, args.version, args.record, args.digest, args.replace_source)
+        elif args.command == 'questionnaire':
+            from .collaboration import questionnaire
+            dependencies = None
+            if args.dependencies:
+                require(not args.dependencies.is_symlink() and args.dependencies.stat().st_size <= 100000, 'Dependencies are unsafe or too large')
+                dependencies = load_json(args.dependencies)
+            rendered = questionnaire(c.status(token, args.id), args.recipient, args.purpose, args.questions, dependencies)
+            write_private(args.output, rendered.encode('utf-8'))
+            print('Questionnaire written. Review before sharing; returned answers still need operator confirmation.')
             return 0
         elif args.command == 'policy': result = {'policy_record': c.set_policy(token, args.project, data)}
         elif args.command == 'stage':

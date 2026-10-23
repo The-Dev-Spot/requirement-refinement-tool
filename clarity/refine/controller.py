@@ -9,10 +9,12 @@ import hashlib
 import json
 import secrets
 import time
+from functools import lru_cache
 from pathlib import Path
 
 from ..guardrails import ValidationError, canonical, digest, identifier
 from ..storage import transaction
+from ..efficiency import AUTHOR_STAGES, STAGES, scorecard
 from . import checks
 from .contracts import DEFAULT_POLICY, draft, fields, policy, require, review, source_record, text
 from .identity import authenticate
@@ -115,10 +117,10 @@ def _policy(db, project):
     return selected
 
 
-def _context(db, run):
+def _context(db, run, records=None):
     sources = {'BRIEF': source_record('BRIEF', 'Original request', run['brief'], 'local:brief:' + run['id'], 'request', run['owner'])}
     questions = {}
-    for r in _records(db, run['id']):
+    for r in (_records(db, run['id']) if records is None else records):
         value = r['data']
         if r['kind'] == 'source':
             sources[value['id']] = value
@@ -139,6 +141,14 @@ def _context(db, run):
         elif r['kind'] == 'question_resolution':
             questions[value['question_id']] = {**questions[value['question_id']], 'state': value['resolution'], 'reason': value['reason'], 'target': value['target']}
     return {'sources': sources, 'questions': questions, 'policy': _policy(db, run['project'])}
+
+
+@lru_cache(maxsize=16)
+def _display_checks(engine, value, sources, selected_policy):
+    # Only the read-only display path uses this bounded pure-result cache. Each
+    # key includes ALL check inputs and the freshly computed implementation hash.
+    # Approval, review and sealing always run authoritative checks directly.
+    return canonical(checks.check(json.loads(value), json.loads(sources), json.loads(selected_policy)))
 
 
 def _current(db, run):
@@ -241,7 +251,7 @@ class Controller:
     def ask(self, token, run_id, expected, value):
         return self.ask_many(token, run_id, expected, [value])
 
-    def ask_many(self, token, run_id, expected, values, expected_context=None):
+    def ask_many(self, token, run_id, expected, values, expected_context=None, *, assistant=False):
         require(isinstance(values, list) and 1 <= len(values) <= 5, "Ask between one and five targeted questions per batch")
         for value in values:
             fields(value, {'id', 'text', 'why', 'impact'}, 'question')
@@ -260,6 +270,7 @@ class Controller:
                 known[value['id']] = value
             for value in values:
                 _record(db, run_id, who, 'question', value)
+            if assistant: _record(db, run_id, who, 'assistant_submission', {'stage': 'questions'})
             _touch(db, run, 'awaiting_decision')
         return self.status(token, run_id)
 
@@ -290,7 +301,18 @@ class Controller:
             _touch(db, run, 'awaiting_revision')
         return self.status(token, run_id)
 
-    def submit(self, token, run_id, expected, value, expected_context=None):
+    def intake_ready(self, token, run_id, expected, expected_context, *, assistant=False):
+        with transaction(self.root) as db:
+            who, run = _access(db, token, run_id, expected, {'author'})
+            context = _context(db, run)
+            require(digest(context) == expected_context, 'Evidence or policy changed; retrieve a fresh intake task')
+            require(not any(q['state'] == 'open' for q in context['questions'].values()), 'Owner decisions remain open')
+            _record(db, run_id, who, 'intake_ready', {'context_digest': expected_context, 'handoff_approved': False})
+            if assistant: _record(db, run_id, who, 'assistant_submission', {'stage': 'intake'})
+            _touch(db, run, 'awaiting_revision')
+        return self.status(token, run_id)
+
+    def submit(self, token, run_id, expected, value, expected_context=None, *, assistant=False):
         value = draft(value)
         with transaction(self.root) as db:
             who, run = _access(db, token, run_id, expected, {'author'})
@@ -298,11 +320,12 @@ class Controller:
             require(expected_context is None or digest(context) == expected_context, 'Evidence or policy changed; get a fresh assistant task')
             require(run['rewrites'] < context['policy']['policy']['max_rewrites'] or run['revision'] == 0, "Rewrite budget exhausted; an operator must authorize another cycle")
             _record(db, run_id, who, 'draft', {'draft': value, 'context_digest': digest(context), 'engine_digest': engine_digest(), 'revision': run['revision'] + 1})
+            if assistant: _record(db, run_id, who, 'assistant_submission', {'stage': 'draft'})
             db.execute('UPDATE refine_runs SET revision=revision+1,rewrites=rewrites+? WHERE id=?', (int(run['revision'] > 0), run_id))
             _touch(db, run, 'awaiting_review')
         return self.status(token, run_id)
 
-    def review(self, token, run_id, expected, value):
+    def review(self, token, run_id, expected, value, *, assistant=False):
         with transaction(self.root) as db:
             who, run = _access(db, token, run_id, expected, {'reviewer'})
             require(who['actor'] != run['owner'], "Draft author cannot independently review the same requirement")
@@ -310,6 +333,7 @@ class Controller:
             value = review(value, current['data']['draft'], digest(current['data']['draft']))
             result = _quality(db, run, current, context, value)
             _record(db, run_id, who, 'review', {'draft_record': current['seq'], 'review': value, 'quality': result})
+            if assistant: _record(db, run_id, who, 'assistant_submission', {'stage': 'review'})
             _touch(db, run, 'awaiting_approval' if result['verdict'] == 'READY' else 'awaiting_revision')
         return self.status(token, run_id)
 
@@ -335,13 +359,14 @@ class Controller:
         return self.status(token, run_id)
 
     def reserve_call(self, token, run_id, expected, stage, expected_context=None):
-        require(stage in {'draft', 'review'}, "Unknown model stage")
+        require(stage in STAGES, "Unknown model stage")
         with transaction(self.root) as db:
-            who, run = _access(db, token, run_id, expected, {'author'} if stage == 'draft' else {'reviewer'})
+            who, run = _access(db, token, run_id, expected, {'author'} if stage in AUTHOR_STAGES else {'reviewer'})
             context = _context(db, run)
             require(expected_context is None or digest(context) == expected_context, 'Evidence or policy changed; refresh before inference')
-            if stage == 'draft':
+            if stage in AUTHOR_STAGES:
                 require(not any(q['state'] == 'open' for q in context['questions'].values()), "Owner decisions are pending; resolve them before another drafting call")
+                if stage == 'revise': require(bool(_records(db, run_id, 'draft')), 'A draft is required for targeted revision')
             else:
                 _current(db, run)
             require(run['calls'] < context['policy']['policy']['max_model_calls'], "Model-call budget exhausted; operator decision required")
@@ -354,7 +379,7 @@ class Controller:
         text(model, 'model identifier', 200)
         require(type(success) is bool and type(elapsed) in (float, int) and 0 <= elapsed < 3600, "Invalid model-call metadata")
         require(provider in {'ollama', 'local-openai', 'openai', 'anthropic', 'custom'}, 'Invalid provider metadata')
-        allowed_metrics = {'total_duration', 'load_duration', 'prompt_eval_count', 'prompt_eval_cached_count', 'prompt_eval_duration', 'eval_count', 'eval_duration', 'input_tokens', 'output_tokens', 'cache_read_input_tokens', 'cache_creation_input_tokens', 'prompt_tokens', 'completion_tokens', 'total_tokens', 'validation_milliseconds', 'provider_milliseconds'}
+        allowed_metrics = {'total_duration', 'load_duration', 'prompt_eval_count', 'prompt_eval_cached_count', 'prompt_eval_duration', 'eval_count', 'eval_duration', 'input_tokens', 'output_tokens', 'cache_read_input_tokens', 'cache_creation_input_tokens', 'prompt_tokens', 'completion_tokens', 'total_tokens', 'validation_milliseconds', 'provider_milliseconds', 'reasoning_tokens', 'estimated_input_tokens', 'request_bytes', 'response_bytes', 'output_limit_tokens', 'context_limit_tokens', 'remaining_estimated_tokens'}
         metrics = {k: v for k, v in (metrics or {}).items() if k in allowed_metrics and type(v) is int and 0 <= v < 10**15}
         with transaction(self.root) as db:
             who, _ = _access(db, token, run_id)
@@ -364,10 +389,10 @@ class Controller:
             _record(db, run_id, who, 'model_call_finished', {'call_id': call_id, 'model': model, 'provider': provider, 'prompt_digest': prompt_digest, 'succeeded': success, 'elapsed_seconds': elapsed, 'metrics': metrics or {}})
 
     def reject_preflight(self, token, run_id, expected, stage, reason):
-        require(stage in {'draft', 'review'}, 'Unknown model stage')
+        require(stage in STAGES, 'Unknown model stage')
         text(reason, 'preflight reason', 2000)
         with transaction(self.root) as db:
-            who, _ = _access(db, token, run_id, expected, {'author'} if stage == 'draft' else {'reviewer'})
+            who, _ = _access(db, token, run_id, expected, {'author'} if stage in AUTHOR_STAGES else {'reviewer'})
             _record(db, run_id, who, 'model_preflight_rejected', {'stage': stage, 'reason': reason, 'inference_reserved': False})
 
     def plan(self, token, run_id, profile='cucumber'):
@@ -431,13 +456,18 @@ class Controller:
     def status(self, token, run_id):
         with transaction(self.root, write=False) as db:
             who, run = _access(db, token, run_id)
-            context = _context(db, run)
-            drafts = _records(db, run_id, 'draft'); reviews = _records(db, run_id, 'review')
+            records = _records(db, run_id)
+            context = _context(db, run, records)
+            drafts = [r for r in records if r['kind'] == 'draft']; reviews = [r for r in records if r['kind'] == 'review']
             current = drafts[-1] if drafts else None
-            checked = checks.check(current['data']['draft'], context['sources'], context['policy']['policy']) if current else None
-            stale = bool(current and (current['data']['context_digest'] != digest(context) or current['data']['engine_digest'] != engine_digest()))
+            engine = engine_digest() if current else None
+            checked = json.loads(_display_checks(engine, canonical(current['data']['draft']), canonical(context['sources']), canonical(context['policy']['policy']))) if current else None
+            stale = bool(current and (current['data']['context_digest'] != digest(context) or current['data']['engine_digest'] != engine))
             ordered = sorted((q for q in context['questions'].values() if q['state'] == 'open'), key=lambda q: (-q['impact'], q['id']))
-            return {'actor': {'name': who['actor'], 'role': who['role']}, 'run': run, 'context': context, 'context_digest': digest(context), 'draft': current['data']['draft'] if current else None, 'draft_digest': digest(current['data']['draft']) if current else None, 'draft_record': current['seq'] if current else None, 'stale': stale, 'checks': checked, 'review': reviews[-1]['data'] if reviews and current and reviews[-1]['data']['draft_record'] == current['seq'] and not stale else None, 'next_question': ordered[0] if ordered else None, 'open_questions': ordered, 'model_calls': [r['data'] for r in _records(db, run_id, 'model_call_finished')][-12:], 'events': [{'id': r['seq'], 'kind': r['kind'], 'actor': r['actor'], 'digest': r['digest']} for r in _records(db, run_id)]}
+            started = {r['seq']: r['data']['stage'] for r in records if r['kind'] == 'model_call_started'}
+            calls = [{**r['data'], 'stage': started.get(r['data']['call_id'], 'unknown')} for r in records if r['kind'] == 'model_call_finished']
+            events = [{'id': r['seq'], 'kind': r['kind'], 'actor': r['actor'], 'digest': r['digest']} for r in records]
+            return {'actor': {'name': who['actor'], 'role': who['role']}, 'run': run, 'context': context, 'context_digest': digest(context), 'draft': current['data']['draft'] if current else None, 'draft_digest': digest(current['data']['draft']) if current else None, 'draft_record': current['seq'] if current else None, 'stale': stale, 'checks': checked, 'review': reviews[-1]['data'] if reviews and current and reviews[-1]['data']['draft_record'] == current['seq'] and not stale else None, 'next_question': ordered[0] if ordered else None, 'open_questions': ordered, 'model_calls': calls[-12:], 'efficiency': scorecard(calls, run, events), 'events': events}
 
     def list_runs(self, token):
         with transaction(self.root, write=False) as db:

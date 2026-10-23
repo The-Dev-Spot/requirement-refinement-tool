@@ -11,7 +11,7 @@ concurrency:
 jobs:
   browser:
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: [self-hosted, Linux, X64, 'host:r720-ai']
+    runs-on: ubuntu-latest
     timeout-minutes: 20
     container:
       image: python:3.12-bookworm

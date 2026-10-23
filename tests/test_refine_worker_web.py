@@ -92,8 +92,8 @@ class WorkerTests(Fixture):
         status = self.status(self.r); status['review'] = {'secret_score': 'writer-score'}
         packet = request_packet(status, 'review')
         self.assertNotIn('writer-score', json.dumps(packet))
-        self.assertIn('statement_support', packet['output_contract'])
-        self.assertIn('scenario_fidelity', packet['output_contract'])
+        self.assertIn('statement_support', packet['response_schema']['properties'])
+        self.assertIn('scenario_fidelity', packet['response_schema']['properties'])
 
     def test_invalid_and_duplicate_json_are_rejected(self):
         for body in ('{"x":1,"x":2}', '{"x":NaN}', '[]', 'not json'):

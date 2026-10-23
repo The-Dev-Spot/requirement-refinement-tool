@@ -4,6 +4,7 @@ Start with [first run and daily use](refinement-workflow.md).
 
 - Connect [Copilot, Codex or Claude Code](assistants.md).
 - Configure a [local model or optional API provider](models.md).
+- Reduce [tokens, repeated work and document volume](efficiency.md).
 - Capture and version [source material](sources.md).
 - Understand the [handoff standard](handoff-standard.md).
 - Keep an encrypted [backup and test recovery](recovery.md).

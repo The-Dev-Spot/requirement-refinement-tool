@@ -1,5 +1,24 @@
 # Local workbench upgrade
 
+## Version 0.5 efficiency changes
+
+- Compact prompts retain selected evidence and review criteria while omitting
+  duplicate schemas, repeated findings and expanded Gherkin examples.
+- Optional intake and digest-bound targeted revisions use stage-specific model
+  profiles/output limits. Full draft validation and fresh independent review remain required.
+- Configurable context estimates reject over-budget calls before reservation;
+  supported cloud APIs can opt into an explicit stable-prefix cache breakpoint.
+- Per-requirement/stage usage includes available nested cache/reasoning counters,
+  failed attempts and assistant submission counts. Unknown usage/cost stays unknown.
+- The default download has two delivery files; the full sealed audit ZIP remains
+  available separately. Existing immutable exports and database schemas are retained.
+- Bounded display-check reuse and one-pass status decoding reduce repeated local work.
+
+Older model profiles gain compatible defaults on read/save. No new dependency,
+credential migration, automatic model escalation, audit pruning or remote publication
+is introduced. Upgrading quality resources requires fresh review for unsealed drafts.
+See [efficient use](efficiency.md) for controls and measurement limits.
+
 This change addresses the audit's implementation and usability work. It preserves
 the existing approval, independent-review and immutable-export boundaries.
 

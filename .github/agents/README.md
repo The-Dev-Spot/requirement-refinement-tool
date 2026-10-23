@@ -2,8 +2,8 @@
 
 Ten specialist role definitions remain available for editor-assisted work. All
 inherit AGENTS.md and the fixed Gherkin-first handoff standard. The executable
-product runner has two explicit stages (interview/draft and independent review);
-it does not automatically invoke all ten profiles.
+product runner has explicit draft/review calls and optional intake/targeted-revision
+actions. It does not automatically invoke extra stages or all ten profiles.
 
 | Role | Responsibility |
 | --- | --- |
