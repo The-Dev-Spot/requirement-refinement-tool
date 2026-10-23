@@ -8,6 +8,7 @@ from pathlib import Path
 from .guardrails import canonical, digest, load_json, identifier, ValidationError
 from .refine.contracts import require, draft, review, DEFAULT_POLICY, fields, text
 from .refine.checks import check
+from .refine.collaboration import question_dependencies
 
 
 def evaluate(corpus, runs, trials=3):
@@ -38,10 +39,11 @@ def evaluate(corpus, runs, trials=3):
                         require(result.get('draft') is None and len(result['questions']) <= 5, 'Invalid question result')
                         seen = set()
                         for q in result['questions']:
-                            fields(q, {'id', 'text', 'why', 'impact'}, 'evaluation question')
+                            fields(q, {'id', 'text', 'why', 'impact'} | ({'prerequisites'} if 'prerequisites' in q else set()), 'evaluation question')
                             identifier(q['id']); text(q['text'], 'question', 3000); text(q['why'], 'question consequence', 3000)
                             require(q['id'] not in seen and type(q['impact']) is int and 1 <= q['impact'] <= 5, 'Invalid or duplicate question')
                             seen.add(q['id'])
+                        question_dependencies({q['id']: {**q, 'state': 'open'} for q in result['questions']})
                         row['questions'] = len(result['questions'])
                         row['contract_passed'] = True
                         row['outcome'] = 'questions'

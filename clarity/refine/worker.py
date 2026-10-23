@@ -9,6 +9,7 @@ from typing import Protocol
 
 from ..guardrails import ValidationError, canonical, digest, _unique
 from ..audit import SECRETS
+from ..clarification import clarification_contract
 from ..efficiency import AUTHOR_STAGES, STAGES, budget, compact_checks, prompt_parts
 from .revisions import apply_revision
 from .schemas import response_schema
@@ -97,13 +98,14 @@ def request_packet(status, stage):
     if stage in AUTHOR_STAGES:
         payload.update({
             'presentation': status['run']['presentation'],
+            'clarification_method': clarification_contract(),
             'instruction': 'First investigate the supplied evidence and previous answers. If consequential decisions or mandatory sections are unsupported, return one to five NEW targeted plain-language questions with why and impact (1-5), and draft=null. Do not repeat answered or already-open questions; report existing unresolved questions by waiting rather than inventing answers. Otherwise return questions=[] and a complete draft. All question IDs must be new. At least problem, value, scope, exclusion and rule statements are needed. Each rule or constraint needs four explicit coverage rows; inapplicable categories need a reason of at least 20 characters instead of scenario_ids. Never mark every category inapplicable. Preserve existing IDs where meaning is unchanged. Guided changes explanations, not the output standard.',
             'current_draft': status['draft'],
             'current_findings': compact_checks(status['checks']),
             'review_feedback': status['review']['review'] if status['review'] else None,
         })
         if stage == 'intake':
-            payload['instruction'] = 'Inspect all selected evidence, policy and recorded decisions. Return one to five NEW material questions with why and impact (1-5), ready_to_draft=false; or questions=[] and ready_to_draft=true if no material decision is missing. Do not draft or repeat answered/open questions. Readiness here is only intake advice, never handoff approval.'
+            payload['instruction'] = 'Inspect all selected evidence, policy, recorded decisions and unresolved responses. Reconsider only material decisions within confirmed scope. Return one to five NEW necessary questions and ready_to_draft=false. If existing open questions cover the remaining decisions, return questions=[] and ready_to_draft=false; do not rephrase them as new questions. Return questions=[] and ready_to_draft=true only when no material decision or open question remains. Partial, unknown, proposed and needs-owner responses are not confirmed decisions. Do not draft, close questions or grant approval. Intake readiness is advice only.'
             payload.pop('current_draft')
             payload.pop('current_findings')
             payload.pop('review_feedback')
@@ -118,7 +120,9 @@ def request_packet(status, stage):
             'instruction': 'Perform an INDEPENDENT cold read. No writer self-score or previous reviewer score is provided. Verify every statement is entailed by its cited passages, not merely that the quote exists. Check actual business behavior against every scenario and its examples, scope and all applicable risk cases. Review every inapplicability reason. Try to describe two materially different implementations satisfying the same text; return material ambiguities with their statement IDs. Only context-sensitive machine warnings may have reasoned warning_resolutions; never suppress hard errors or security signals. Do not optimize for a READY verdict.',
             'draft': current, 'machine_findings': compact_checks(status['checks']),
         })
-    if stage == 'review': payload['instruction'] += ' Copy machine_findings.draft_digest exactly.'
+    if stage in AUTHOR_STAGES:
+        payload['instruction'] += ' Every new question has a new id, text, why, impact (1-5), and prerequisites containing existing or same-batch question IDs; use [] when independent. Prefer one foundational question when its answer changes later questions; batch only questions that can usefully be answered together. Never treat unresolved response text as authoritative evidence.'
+    if stage == 'review': payload['instruction'] += ' Copy machine_findings.draft_digest exactly. Check that any recorded partial, unknown, proposal or needs-owner response has not been promoted to a confirmed business rule. Use current question state and decision sources: an invalidated question can retain a historical confirmed response while remaining open and without authority.'
     payload['instruction'] += ' Return concise, specific text; review rationales must substantiate each judgment in at least 20 characters. The source BRIEF is the original request. Follow the supplied response schema; no duplicate narrative report is needed.'
     payload['response_schema'] = response_schema(stage, status)
     return payload
@@ -130,7 +134,7 @@ def preflight(status, stage, provider=None):
         require(status['run']['calls'] < status['context']['policy']['policy']['max_model_calls'], 'Model-call budget exhausted; operator decision required before inference')
     if stage in {'draft', 'revise'} and status['run']['revision']:
         require(status['run']['rewrites'] < status['context']['policy']['policy']['max_rewrites'], 'Rewrite budget exhausted; an operator must authorize another cycle before inference')
-    if stage in AUTHOR_STAGES and status['open_questions']:
+    if stage in {'draft', 'revise'} and status['open_questions']:
         raise ValidationError('Owner decisions are pending; resolve them before another drafting call')
     packet = request_packet(status, stage)
     require(len(canonical(packet).encode()) <= 200000, 'Selected evidence exceeds the model-call input budget; select smaller excerpts before retrying')
@@ -147,13 +151,15 @@ def apply_author_result(controller, token, run_id, expected, stage, response, st
     fields(response, {'questions', output}, 'author-stage response')
     questions = items(response['questions'], 'model questions', 5)
     if stage == 'intake':
-        require(type(response[output]) is bool and bool(questions) != response[output], 'Return questions or intake readiness, never both or neither')
+        require(type(response[output]) is bool, 'Intake readiness must be a boolean')
+        require(not (questions and response[output]), 'Questions cannot imply intake readiness')
     else:
         require(bool(questions) != (response[output] is not None), 'Return either questions or a draft/revision, never both or neither')
     if questions:
         return controller.ask_many(token, run_id, expected, questions, status['context_digest'], assistant=assistant)
     if stage == 'intake':
-        return controller.intake_ready(token, run_id, expected, status['context_digest'], assistant=assistant)
+        action = controller.intake_ready if response[output] else controller.intake_waiting
+        return action(token, run_id, expected, status['context_digest'], assistant=assistant)
     require(stage != 'revise' or status['draft'] is not None, 'A draft is required for targeted revision')
     value = apply_revision(status['draft'], response['revision']) if stage == 'revise' else draft(response['draft'])
     return controller.submit(token, run_id, expected, value, status['context_digest'], assistant=assistant)
@@ -192,8 +198,11 @@ def run_stage(controller, token, run_id, expected, stage, provider: Provider, ca
         if 'response' in locals(): metrics['response_bytes'] = len(canonical(response).encode())
         if provider_finished is not None:
             metrics.update(provider_milliseconds=round((provider_finished - started) * 1000), validation_milliseconds=round((ended - provider_finished) * 1000))
+        prompt_contract = {'system': SYSTEM, 'instruction': packet['instruction'], 'response_schema': packet['response_schema']}
+        if 'clarification_method' in packet:
+            prompt_contract['clarification_method'] = packet['clarification_method']
         controller.finish_call(token, run_id, call_id, provider.name, success, round(ended - started, 3), metrics,
-                               getattr(provider, 'provider', 'custom'), digest({'system': SYSTEM, 'instruction': packet['instruction'], 'response_schema': packet['response_schema']}))
+                               getattr(provider, 'provider', 'custom'), digest(prompt_contract))
     return controller.status(token, run_id)
 
 

@@ -16,6 +16,7 @@ from ..guardrails import ValidationError, canonical, digest, identifier
 from ..storage import transaction
 from ..efficiency import AUTHOR_STAGES, STAGES, scorecard
 from . import checks
+from .collaboration import dependent_questions, question_dependencies, ready_questions
 from .contracts import DEFAULT_POLICY, draft, fields, policy, require, review, source_record, text
 from .identity import authenticate
 
@@ -54,6 +55,7 @@ def engine_digest() -> str:
     package = Path(__file__).parents[1]
     root = package.parent
     resources = {'AGENTS.md': 'AGENTS.md', 'handoff-standard.md': 'docs/handoff-standard.md',
+                 'po-clarification.md': '.github/skills/po-clarification/SKILL.md',
                  'runtime-doc-contract.json': '.github/agents/runtime-doc-contract.json', 'requirements.lock': 'requirements.lock'}
     try:
         hashes = {str(p.relative_to(package)): hashlib.sha256(p.read_bytes()).hexdigest()
@@ -131,13 +133,42 @@ def _context(db, run, records=None):
         elif r['kind'] == 'source_superseded':
             sources.pop(value['old_id'], None)
         elif r['kind'] == 'question':
-            questions[value['id']] = {**value, 'state': 'open'}
-        elif r['kind'] == 'answer':
-            old_decision = questions[value['question_id']].get('decision_source')
+            questions[value['id']] = {**value, 'prerequisites': value.get('prerequisites', []), 'state': 'open'}
+        elif r['kind'] in {'answer', 'question_response', 'question_invalidation'}:
+            question = questions[value['question_id']]
+            old_decision = question.pop('decision_source', None)
             if old_decision:
                 sources.pop(old_decision, None)
-            questions[value['question_id']] = {**questions[value['question_id']], 'state': 'answered', 'decision_source': value['source']['id']}
-            sources[value['source']['id']] = value['source']
+            if r['kind'] != 'question_invalidation':
+                response = ({'kind': 'confirmed', 'text': value['source']['text'],
+                             'decision_owner': value.get('decision_owner')}
+                            if r['kind'] == 'answer' else value['response'])
+                previous = question.get('response')
+                if previous is not None and previous != response:
+                    # Preserve earlier information for follow-up without granting
+                    # it authority or duplicating the current response. The full
+                    # chronological record remains in immutable audit events.
+                    excluded = set(question.get('excluded_response_digests', []))
+                    history = [item for item in question.get('response_history', [])
+                               if item != response and item != previous and digest(item) not in excluded]
+                    question['response_history'] = history + ([previous] if digest(previous) not in excluded else [])
+            if r['kind'] == 'answer':
+                question.update(state='answered', decision_source=value['source']['id'],
+                                response=response)
+                question.pop('invalidated_by', None)
+                sources[value['source']['id']] = value['source']
+            elif r['kind'] == 'question_response':
+                question.update(state='open', response=response)
+                question.pop('invalidated_by', None)
+            else:
+                # Keep the historical confirmed response visible for reconsideration,
+                # but it is no longer an answer or evidence for the current context.
+                question.update(state='open', invalidated_by=value['invalidated_by'])
+        elif r['kind'] == 'response_history_exclusion':
+            question = questions[value['question_id']]
+            excluded = set(question.get('excluded_response_digests', [])) | {value['response_digest']}
+            question['excluded_response_digests'] = sorted(excluded)
+            question['response_history'] = [item for item in question.get('response_history', []) if digest(item) not in excluded]
         elif r['kind'] == 'question_resolution':
             questions[value['question_id']] = {**questions[value['question_id']], 'state': value['resolution'], 'reason': value['reason'], 'target': value['target']}
     return {'sources': sources, 'questions': questions, 'policy': _policy(db, run['project'])}
@@ -254,9 +285,11 @@ class Controller:
     def ask_many(self, token, run_id, expected, values, expected_context=None, *, assistant=False):
         require(isinstance(values, list) and 1 <= len(values) <= 5, "Ask between one and five targeted questions per batch")
         for value in values:
-            fields(value, {'id', 'text', 'why', 'impact'}, 'question')
+            require(isinstance(value, dict), 'Invalid fields: question')
+            fields(value, {'id', 'text', 'why', 'impact'} | ({'prerequisites'} if 'prerequisites' in value else set()), 'question')
             identifier(value['id']); text(value['text'], 'question', 3000); text(value['why'], 'decision consequence', 3000)
             require(type(value['impact']) is int and 1 <= value['impact'] <= 5, "Question impact must be 1 to 5")
+        values = [{**value, 'prerequisites': value.get('prerequisites', [])} for value in values]
         with transaction(self.root) as db:
             who, run = _access(db, token, run_id, expected, {'author', 'reviewer'})
             context = _context(db, run)
@@ -267,23 +300,61 @@ class Controller:
             for value in values:
                 require(value['id'] not in known, "Question IDs cannot be repurposed")
                 require(all(norm(q['text']) != norm(value['text']) for q in known.values()), "This question was already asked; resume its answer or resolution")
-                known[value['id']] = value
+                known[value['id']] = {**value, 'state': 'open'}
+            question_dependencies(known)
             for value in values:
                 _record(db, run_id, who, 'question', value)
             if assistant: _record(db, run_id, who, 'assistant_submission', {'stage': 'questions'})
             _touch(db, run, 'awaiting_decision')
         return self.status(token, run_id)
 
-    def answer(self, token, run_id, expected, question_id, answer):
+    def answer(self, token, run_id, expected, question_id, answer, *, response_kind='confirmed', decision_owner=None):
         text(answer, 'owner answer', 10000)
+        require(isinstance(response_kind, str) and response_kind in {'confirmed', 'partial', 'unknown', 'proposal', 'needs_owner'}, 'Invalid response kind')
+        if decision_owner is not None:
+            text(decision_owner, 'decision owner', 300)
         with transaction(self.root) as db:
             who, run = _access(db, token, run_id, expected, {'operator'})
-            question = _context(db, run)['questions'].get(question_id)
+            questions = _context(db, run)['questions']
+            question = questions.get(question_id)
             require(question is not None and question['state'] in {'open', 'answered'}, "Question is absent or has an explicit non-answer resolution")
-            sid = 'DEC-' + secrets.token_hex(8)
-            source = source_record(sid, 'Owner decision on ' + question_id, answer, 'local:decision:' + run_id + ':' + sid, 'decision', who['actor'])
-            _record(db, run_id, who, 'answer', {'question_id': question_id, 'source': source})
-            _touch(db, run, 'awaiting_revision')
+            response = {'kind': response_kind, 'text': answer, 'decision_owner': decision_owner}
+            if response_kind == 'confirmed':
+                edges = question_dependencies(questions)
+                unresolved = sorted(qid for qid in edges[question_id] if questions[qid]['state'] not in {'answered', 'out_of_scope'})
+                require(not unresolved, 'Resolve prerequisite decisions before confirming this answer: ' + ', '.join(unresolved))
+                sid = 'DEC-' + secrets.token_hex(8)
+                source = source_record(sid, 'Owner decision on ' + question_id, answer, 'local:decision:' + run_id + ':' + sid, 'decision', who['actor'])
+                _record(db, run_id, who, 'answer', {'question_id': question_id, 'source': source, 'decision_owner': decision_owner})
+            else:
+                _record(db, run_id, who, 'question_response', {'question_id': question_id, 'response': response})
+            if question['state'] == 'answered' and question.get('response') != response:
+                for dependent in dependent_questions(questions, question_id):
+                    if questions[dependent]['state'] == 'answered':
+                        _record(db, run_id, who, 'question_invalidation', {'question_id': dependent, 'invalidated_by': [question_id]})
+            current = _context(db, run)
+            _touch(db, run, 'awaiting_decision' if any(q['state'] == 'open' for q in current['questions'].values()) else 'awaiting_revision')
+        return self.status(token, run_id)
+
+    def exclude_response_history(self, token, run_id, expected, question_id, response_digest, reason):
+        identifier(question_id)
+        require(type(expected) is int, 'Supply the last displayed requirement version')
+        require(isinstance(response_digest, str) and len(response_digest) == 64
+                and all(character in '0123456789abcdef' for character in response_digest), 'Invalid response digest')
+        require(len(text(reason, 'response-history exclusion rationale', 5000).strip()) >= 20,
+                'Explain why this exact historical response should be excluded from model context')
+        with transaction(self.root) as db:
+            who, run = _access(db, token, run_id, expected, {'operator'})
+            context = _context(db, run)
+            question = context['questions'].get(question_id)
+            require(question is not None, 'Question is absent')
+            require(question.get('response') is None or digest(question['response']) != response_digest,
+                    'A current response cannot be excluded; record a corrected response first')
+            require(any(digest(item) == response_digest for item in question.get('response_history', [])),
+                    'Select an exact response currently in this question history')
+            _record(db, run_id, who, 'response_history_exclusion',
+                    {'question_id': question_id, 'response_digest': response_digest, 'reason': reason})
+            _touch(db, run, 'awaiting_decision' if any(q['state'] == 'open' for q in context['questions'].values()) else 'awaiting_revision')
         return self.status(token, run_id)
 
     def resolve_question(self, token, run_id, expected, question_id, resolution, target, reason):
@@ -297,6 +368,9 @@ class Controller:
                 require(isinstance(target, str) and target != question_id and target in questions and questions[target]['state'] == 'open', "Merge requires another open question and cannot create a cycle")
             else:
                 require(target is None, "Out-of-scope resolution has no merge target")
+            projected = {qid: dict(q) for qid, q in questions.items()}
+            projected[question_id].update(state=resolution, target=target)
+            question_dependencies(projected)
             _record(db, run_id, who, 'question_resolution', {'question_id': question_id, 'resolution': resolution, 'target': target, 'reason': reason})
             _touch(db, run, 'awaiting_revision')
         return self.status(token, run_id)
@@ -312,12 +386,24 @@ class Controller:
             _touch(db, run, 'awaiting_revision')
         return self.status(token, run_id)
 
+    def intake_waiting(self, token, run_id, expected, expected_context, *, assistant=False):
+        with transaction(self.root) as db:
+            who, run = _access(db, token, run_id, expected, {'author'})
+            context = _context(db, run)
+            require(digest(context) == expected_context, 'Evidence or policy changed; retrieve a fresh intake task')
+            require(any(q['state'] == 'open' for q in context['questions'].values()), 'Waiting intake requires an unresolved owner decision')
+            _record(db, run_id, who, 'intake_waiting', {'context_digest': expected_context, 'handoff_approved': False})
+            if assistant: _record(db, run_id, who, 'assistant_submission', {'stage': 'intake'})
+            _touch(db, run, 'awaiting_decision')
+        return self.status(token, run_id)
+
     def submit(self, token, run_id, expected, value, expected_context=None, *, assistant=False):
         value = draft(value)
         with transaction(self.root) as db:
             who, run = _access(db, token, run_id, expected, {'author'})
             context = _context(db, run)
             require(expected_context is None or digest(context) == expected_context, 'Evidence or policy changed; get a fresh assistant task')
+            require(not any(q['state'] == 'open' for q in context['questions'].values()), 'Owner decisions are pending; resolve them before submitting a draft')
             require(run['rewrites'] < context['policy']['policy']['max_rewrites'] or run['revision'] == 0, "Rewrite budget exhausted; an operator must authorize another cycle")
             _record(db, run_id, who, 'draft', {'draft': value, 'context_digest': digest(context), 'engine_digest': engine_digest(), 'revision': run['revision'] + 1})
             if assistant: _record(db, run_id, who, 'assistant_submission', {'stage': 'draft'})
@@ -365,7 +451,7 @@ class Controller:
             context = _context(db, run)
             require(expected_context is None or digest(context) == expected_context, 'Evidence or policy changed; refresh before inference')
             if stage in AUTHOR_STAGES:
-                require(not any(q['state'] == 'open' for q in context['questions'].values()), "Owner decisions are pending; resolve them before another drafting call")
+                require(stage == 'intake' or not any(q['state'] == 'open' for q in context['questions'].values()), "Owner decisions are pending; resolve them before another drafting call")
                 if stage == 'revise': require(bool(_records(db, run_id, 'draft')), 'A draft is required for targeted revision')
             else:
                 _current(db, run)
@@ -464,10 +550,11 @@ class Controller:
             checked = json.loads(_display_checks(engine, canonical(current['data']['draft']), canonical(context['sources']), canonical(context['policy']['policy']))) if current else None
             stale = bool(current and (current['data']['context_digest'] != digest(context) or current['data']['engine_digest'] != engine))
             ordered = sorted((q for q in context['questions'].values() if q['state'] == 'open'), key=lambda q: (-q['impact'], q['id']))
+            ready = ready_questions(context['questions'])
             started = {r['seq']: r['data']['stage'] for r in records if r['kind'] == 'model_call_started'}
             calls = [{**r['data'], 'stage': started.get(r['data']['call_id'], 'unknown')} for r in records if r['kind'] == 'model_call_finished']
             events = [{'id': r['seq'], 'kind': r['kind'], 'actor': r['actor'], 'digest': r['digest']} for r in records]
-            return {'actor': {'name': who['actor'], 'role': who['role']}, 'run': run, 'context': context, 'context_digest': digest(context), 'draft': current['data']['draft'] if current else None, 'draft_digest': digest(current['data']['draft']) if current else None, 'draft_record': current['seq'] if current else None, 'stale': stale, 'checks': checked, 'review': reviews[-1]['data'] if reviews and current and reviews[-1]['data']['draft_record'] == current['seq'] and not stale else None, 'next_question': ordered[0] if ordered else None, 'open_questions': ordered, 'model_calls': calls[-12:], 'efficiency': scorecard(calls, run, events), 'events': events}
+            return {'actor': {'name': who['actor'], 'role': who['role']}, 'run': run, 'context': context, 'context_digest': digest(context), 'draft': current['data']['draft'] if current else None, 'draft_digest': digest(current['data']['draft']) if current else None, 'draft_record': current['seq'] if current else None, 'stale': stale, 'checks': checked, 'review': reviews[-1]['data'] if reviews and current and reviews[-1]['data']['draft_record'] == current['seq'] and not stale else None, 'next_question': ready[0] if ready else None, 'ready_questions': ready, 'open_questions': ordered, 'model_calls': calls[-12:], 'efficiency': scorecard(calls, run, events), 'events': events}
 
     def list_runs(self, token):
         with transaction(self.root, write=False) as db:

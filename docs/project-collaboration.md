@@ -5,8 +5,9 @@ pipeline client, dispatch action, remote publication or new model permission is
 introduced. The existing workbench, compact default download, source limits,
 independent review and exact approval/sealing controls remain unchanged.
 
-The new controls are available through `python -m clarity.refine`; dedicated
-workbench forms are not part of this change. A selected glossary appears in the
+Glossary approval and questionnaire/portable exports are available through
+`python -m clarity.refine`. The live PO interview also supports prerequisite ordering
+and explicit response kinds in the workbench. A selected glossary appears in the
 existing Sources view and reaches assistants through the normal selected-evidence
 path. Never give an assistant the operator key or private controller workspace.
 
@@ -63,6 +64,10 @@ existing context digest. Starting new requirements without a glossary is still v
 Use the existing interview to distinguish discoverable facts from consequential
 owner decisions. Read selected evidence before re-asking. Resolve prerequisite
 choices before dependent ones; ending an interview is not proof of completeness.
+The shared [PO clarification contract](../.github/skills/po-clarification/SKILL.md)
+gives the Analyst evidence investigation, the Challenger question selection and the
+Responder answer interpretation within one continuing history.
+
 When the current requester lacks knowledge or authority, export only the relevant
 open questions for a suitable stakeholder:
 
@@ -74,11 +79,14 @@ python -m clarity.refine --state /private/clarity questionnaire \
   --output /private/cancellation-questions.md
 ```
 
-The optional dependency file is an explicit map, for example `{"Q2":["Q1"]}`.
-The helper rejects unknown references, duplicates and cycles, follows merged
-question targets and orders questions by prerequisite then impact. Already answered
-or explicitly out-of-scope prerequisites do not need to be re-asked. An omitted
-open prerequisite is flagged by ID rather than silently treated as answered.
+Questions persist their own `prerequisites` array. The live interview offers questions
+whose prerequisites are settled and ranks eligible questions by impact. Export
+inherits these dependencies. The optional file is an explicit overlay for that
+questionnaire, for example `{"Q2":["Q1"]}`; it does not change stored questions or
+live ordering. The helper rejects unknown references, duplicates and cycles, follows
+merged targets and orders questions by prerequisite then impact. Already answered
+or explicitly out-of-scope prerequisites do not need to be re-asked. An omitted open
+prerequisite is flagged by ID rather than silently treated as answered.
 
 The document contains stable question IDs, selected question text/consequences,
 recipient role, purpose, requirement version and context digest. It does not attach
@@ -87,9 +95,45 @@ can itself be sensitive. Return answers through the existing operator answer/sou
 confirmation workflow, not automatic import. New evidence still requires normal
 revision and independent review.
 
-Dependency maps currently guide the exported questionnaire, not the workbench's
-live next-question ordering or a new model schema. This avoids silently changing
-existing assistant contracts. The export never mutates or resolves questions.
+Record the nature of each returned answer explicitly. For example, an operator may
+record this response JSON without treating it as a confirmed business rule:
+
+```json
+{
+  "question_id": "Q1",
+  "answer": "Operations must confirm whether a running report can be cancelled.",
+  "response_kind": "needs_owner",
+  "decision_owner": "Operations owner"
+}
+```
+
+```sh
+python -m clarity.refine --state /private/clarity action answer \
+  --key-file /private/operator.key --id REQ1 --version CURRENT_VERSION \
+  --input /private/answer.json
+```
+
+Supported response kinds are `confirmed`, `partial`, `unknown`, `proposal` and
+`needs_owner`. Only `confirmed` answers become decision sources and settle questions;
+the others remain open. The optional owner label identifies a routing need, not an
+authenticated person. Existing callers that omit `response_kind` retain the previous
+confirmed-answer behavior; new clients should send the kind explicitly. Questions
+from older clients may omit `prerequisites`; model task schemas require an array,
+empty when no prerequisite exists.
+
+Earlier distinct responses are retained as historical context, without decision
+authority. To exclude one from future model tasks, the operator can use the browser
+history action or `action exclude-response-history` with JSON fields `question_id`,
+`response_digest` and `reason`. The digest must match the entire selected item in
+`response_history`; the reason must explain the exclusion. This affects only earlier
+context, preserves the original immutable audit and requires fresh drafting/review.
+
+Changing a confirmed prerequisite reopens affected confirmed dependent decisions
+and removes their current decision-source authority until reconfirmation. The audit
+history remains intact. Use a new question ID for a necessary follow-up; model calls
+cannot silently merge or remove existing questions. An explicit, budgeted intake
+call can reconsider pending gaps, but draft and revision calls remain blocked while
+any question is open. The questionnaire export itself never mutates or resolves them.
 
 ## Optional portable view of an existing seal
 

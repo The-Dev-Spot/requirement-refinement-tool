@@ -43,6 +43,8 @@ def submit(controller, token, run_id, expected, expected_context, result, stage=
 def receipt(status):
     return {'run_id': status['run']['id'], 'version': status['run']['version'], 'state': status['run']['state'],
             'next_question': status['next_question'], 'findings': (status['checks'] or {}).get('findings', []),
+            'ready_question_ids': [q['id'] for q in status.get('ready_questions', status['open_questions'])],
+            'open_question_ids': [q['id'] for q in status['open_questions']],
             'review_verdict': status['review']['quality']['verdict'] if status['review'] else None}
 
 

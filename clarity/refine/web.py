@@ -12,9 +12,10 @@ from http.cookies import SimpleCookie
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlsplit
 
-from ..guardrails import ValidationError, canonical
+from ..guardrails import ValidationError, canonical, digest
 from .contracts import require
 from .controller import Controller
+from .collaboration import question_dependencies
 from .handoff import archive, verify_bundle
 from .worker import decode, run_stage, request_packet
 from ..workspace import Workspace, initialize as initialize_settings
@@ -34,9 +35,10 @@ def boolean(value):
     return value == 'true'
 
 
-def render_status(status, csrf, model_enabled, planned=None, plan_error=None, *, models=(), sources=(), jobs=(), root=None):
+def render_status(status, csrf, model_enabled, planned=None, plan_error=None, *, models=(), sources=(), jobs=(), root=None, question_id=None):
     run = status['run']; role = status['actor']['role']; rid = run['id']
     path = '/run/' + rid + '/'
+    pending = bool(status['open_questions'])
     base = {'version': run['version']}
     make = lambda action, content, label, hidden=None: form(path + action, csrf, content, label, {**base, **(hidden or {})})
     stages = ['Capture', 'Decisions', 'Draft', 'Review', 'Approve', 'Handoff']
@@ -49,14 +51,14 @@ def render_status(status, csrf, model_enabled, planned=None, plan_error=None, *,
         affected = [v['id'] for v in (status['draft'] or {}).get('statements', []) if any(c['source_id'] not in status['context']['sources'] or status['context']['sources'][c['source_id']]['digest'] != c['source_digest'] for c in v['citations'])]
         if affected: body += '<p>Changed source citations affect: ' + esc(', '.join(affected)) + '.</p>'
     if model_enabled and role in {'author', 'reviewer'} and run['state'] not in {'exported', 'rejected'}:
-        stage = ('revise' if status['draft'] else 'draft') if role == 'author' else 'review'
-        if not (stage in AUTHOR_STAGES and status['open_questions']):
-            body += make('model', '<small>Explicitly run the configured model using only this brief’s selected evidence. No approval or tracker write is granted.</small>', 'Refine this request' if stage in AUTHOR_STAGES else 'Run independent model review', {'stage': stage})
+        stage = ('intake' if pending else 'revise' if status['draft'] else 'draft') if role == 'author' else 'review'
+        label = 'Reconsider open decisions' if stage == 'intake' else 'Refine this request' if stage in AUTHOR_STAGES else 'Run independent model review'
+        body += make('model', '<small>Use the selected evidence for one budgeted call. Clarification can expose follow-ups; only an authorised owner can settle decisions.</small>', label, {'stage': stage})
     elif not model_enabled and role in {'author', 'reviewer'} and run['state'] not in {'exported', 'rejected'}:
         body += '<p class="notice">Use your coding assistant below, or select a saved local model. <a href="/settings">Manage setup</a></p>'
     if role in {'author', 'reviewer'}:
         try:
-            packet = request_packet(status, ('revise' if status['draft'] else 'draft') if role == 'author' else 'review')
+            packet = request_packet(status, ('intake' if pending else 'revise' if status['draft'] else 'draft') if role == 'author' else 'review')
             usage = budget(SYSTEM, packet)
             body += '<small>Estimated input: ' + str(usage['estimated_input_tokens']) + ' tokens. Task packet: ' + str(len(canonical(packet).encode())) + ' / 200000 bytes. Reserved calls this cycle: ' + str(run['calls']) + '.</small><small>Estimate = UTF-8 bytes ÷ 3 plus 512 wrapper tokens; actual tokenizers vary. Saved model budgets below reserve output space.</small>'
         except ValidationError: pass
@@ -66,26 +68,25 @@ def render_status(status, csrf, model_enabled, planned=None, plan_error=None, *,
         available = [m for m in models if m['enabled'] and m['provider'] != 'host-assistant']
         if available:
             body += '<section><h2>Run a saved model</h2>'
-            if role == 'author' and status['open_questions']:
-                body += '<p>Resolve the pending owner decisions before another model call.</p>'
-            else:
-                stages = (['revise', 'draft'] if status['draft'] else ['draft', 'intake']) if role == 'author' else ['review']
-                labels = {'draft': 'Create a complete draft', 'revise': 'Revise changed items only', 'intake': 'Check missing decisions only (optional)', 'review': 'Run independent review'}
-                rendered = 0
-                for stage in stages:
-                    profiles = [model_settings(m) for m in available if m.get('stage', 'any') in {'any', stage}]
-                    if not profiles: continue
-                    try: packet = request_packet(status, stage)
-                    except ValidationError: continue
-                    section = make('model-profile', views.select('profile', 'Model connection', [(m['id'], m['id'] + ' · ' + m['model']) for m in profiles]), labels[stage], {'stage': stage})
-                    section += '<details><summary>Input and output budgets before running</summary><div class="tablewrap"><table><thead><tr><th>Profile</th><th>Estimated input</th><th>Output reserve</th><th>Context remaining</th></tr></thead><tbody>'
-                    for m in profiles:
-                        usage = budget(SYSTEM, packet, output_tokens=m.get(stage + '_max_tokens', m['max_tokens']), context_tokens=m['context_tokens'])
-                        remaining = 'Unknown capacity' if usage['remaining_estimated_tokens'] is None else str(usage['remaining_estimated_tokens']) + (' · blocked' if not usage['fits_estimated_context'] else '')
-                        section += '<tr><td>' + esc(m['id']) + '</td><td>' + str(usage['estimated_input_tokens']) + '</td><td>' + str(usage['output_limit_tokens']) + '</td><td>' + esc(remaining) + '</td></tr>'
-                    section += '</tbody></table></div></details>'
-                    body += section if rendered == 0 else '<details><summary>' + labels[stage] + '</summary>' + section + '</details>'
-                    rendered += 1
+            if role == 'author' and pending:
+                body += '<p>Drafting waits for owner decisions. You can explicitly reconsider the open questions after receiving new information.</p>'
+            stages = (['intake'] if pending else ['revise', 'draft', 'intake'] if status['draft'] else ['draft', 'intake']) if role == 'author' else ['review']
+            labels = {'draft': 'Create a complete draft', 'revise': 'Revise changed items only', 'intake': 'Reconsider open decisions' if pending else 'Check missing decisions only (optional)', 'review': 'Run independent review'}
+            rendered = 0
+            for stage in stages:
+                profiles = [model_settings(m) for m in available if m.get('stage', 'any') in {'any', stage}]
+                if not profiles: continue
+                try: packet = request_packet(status, stage)
+                except ValidationError: continue
+                section = make('model-profile', views.select('profile', 'Model connection', [(m['id'], m['id'] + ' · ' + m['model']) for m in profiles]), labels[stage], {'stage': stage})
+                section += '<details><summary>Input and output budgets before running</summary><div class="tablewrap"><table><thead><tr><th>Profile</th><th>Estimated input</th><th>Output reserve</th><th>Context remaining</th></tr></thead><tbody>'
+                for m in profiles:
+                    usage = budget(SYSTEM, packet, output_tokens=m.get(stage + '_max_tokens', m['max_tokens']), context_tokens=m['context_tokens'])
+                    remaining = 'Unknown capacity' if usage['remaining_estimated_tokens'] is None else str(usage['remaining_estimated_tokens']) + (' · blocked' if not usage['fits_estimated_context'] else '')
+                    section += '<tr><td>' + esc(m['id']) + '</td><td>' + str(usage['estimated_input_tokens']) + '</td><td>' + str(usage['output_limit_tokens']) + '</td><td>' + esc(remaining) + '</td></tr>'
+                section += '</tbody></table></div></details>'
+                body += section if rendered == 0 else '<details><summary>' + labels[stage] + '</summary>' + section + '</details>'
+                rendered += 1
             body += '<small>Each action is one explicit call. Intake is optional; complete briefs can go straight to drafting. Only selected evidence is sent. Jobs run in the background without automatic retries.</small></section>'
     if jobs:
         body += '<section aria-live="polite"><div class="row"><h2>Model activity</h2><a href="/run/' + esc(rid) + '">Refresh status</a></div>'
@@ -107,14 +108,54 @@ def render_status(status, csrf, model_enabled, planned=None, plan_error=None, *,
             if 'provider_milliseconds' in metrics: body += '<small>Provider request: %.3f seconds; validation/recording: %.3f seconds.</small>' % (metrics['provider_milliseconds'] / 1000, metrics.get('validation_milliseconds', 0) / 1000)
             body += '<pre>' + esc(canonical(metrics)) + '</pre>'
         body += '<small>Usage is reported by the selected provider when available. No semantic confidence or price is inferred.</small></details></section>'
-    if status['next_question']:
-        q = status['next_question']
-        body += '<section class="decision"><span class="eyebrow">One decision at a time</span><h2>Next decision</h2><h3>' + esc(q['text']) + '</h3><p>' + esc(q['why']) + '</p>'
+    questions = status['context']['questions']
+    eligible = {q['id'] for q in status.get('ready_questions', status['open_questions'])}
+    selected = questions.get(question_id)
+    q = selected if selected and (selected['id'] in eligible or selected['state'] == 'answered') else status['next_question']
+    if q:
+        body += '<section class="decision"><span class="eyebrow">Decision ' + esc(q['id']) + ' · ' + str(len(status['open_questions'])) + ' open</span><h2>' + ('Review decision' if q['state'] == 'answered' else 'Next decision') + '</h2><h3>' + esc(q['text']) + '</h3><p>' + esc(q['why']) + '</p>'
+        response = q.get('response')
+        if response:
+            labels = {'confirmed': 'Previously confirmed', 'partial': 'Partial answer', 'unknown': 'Not yet known', 'proposal': 'Proposed answer', 'needs_owner': 'Another owner must decide'}
+            body += '<div class="notice"><strong>' + esc(labels.get(response['kind'], response['kind'])) + '</strong><p>' + esc(response['text']) + '</p>'
+            if response.get('decision_owner'): body += '<small>Decision owner: ' + esc(response['decision_owner']) + '</small>'
+            body += '</div>'
+        if q.get('invalidated_by'):
+            body += '<p class="notice">This answer needs reconfirmation because ' + esc(', '.join(q['invalidated_by'])) + ' changed.</p>'
+        if q.get('response_history'):
+            body += '<details><summary>Earlier responses (history only)</summary><p>These earlier responses provide context; they do not establish a current decision.</p>'
+            for earlier in q['response_history']:
+                body += '<p><strong>' + esc(labels.get(earlier['kind'], earlier['kind'])) + '</strong>: ' + esc(earlier['text']) + '</p>'
+                if earlier.get('decision_owner'): body += '<small>Decision owner: ' + esc(earlier['decision_owner']) + '</small>'
+                if role == 'operator':
+                    content = field('reason', 'Why exclude this earlier response?', textarea=True)
+                    content += '<small>This changes future model context and requires fresh drafting and review. The original audit record remains. Current answers and decision sources are unaffected.</small>'
+                    body += make('exclude-response-history', content, 'Exclude earlier response from context',
+                                 {'question_id': q['id'], 'response_digest': digest(earlier)})
+            body += '</details>'
+        if q.get('excluded_response_digests'):
+            body += '<p class="muted">' + str(len(q['excluded_response_digests'])) + ' earlier response(s) explicitly excluded from model context; originals remain in the audit.</p>'
         if role == 'operator':
-            body += make('answer', field('answer', 'Confirmed business answer', textarea=True), 'Record owner decision', {'question_id': q['id']})
+            kinds = [('', 'Choose a response type'), ('confirmed', 'Confirmed business decision'), ('partial', 'Partial answer'), ('unknown', 'I do not know yet'), ('proposal', 'Proposal for discussion'), ('needs_owner', 'Another owner must decide')]
+            content = views.select('response_kind', 'Response type', kinds, required=True) + field('answer', 'Your response', textarea=True) + field('decision_owner', 'Decision owner or team (optional)', required=False)
+            content += '<small>Only a confirmed decision resolves this question. Other responses preserve the gap. Changing a confirmed decision can require dependent answers to be reconfirmed.</small>'
+            body += make('answer', content, 'Record response', {'question_id': q['id']})
         else:
             body += '<p>An operator with authority over the requirement must confirm this decision. An unanswered question is not filled with an assumption.</p>'
         body += '</section>'
+    if questions:
+        dependencies = question_dependencies(questions)
+        body += '<section><details><summary>Question and decision history</summary><ul>'
+        for item in questions.values():
+            title = esc(item['id'] + ' · ' + item['text'])
+            if item['id'] in eligible or item['state'] == 'answered':
+                title = '<a href="/run/' + esc(rid) + '?question=' + esc(item['id']) + '">' + title + '</a>'
+            body += '<li>' + title + ' <span class="chip gray">' + esc(item['state'].replace('_', ' ')) + '</span>'
+            if item['state'] == 'open' and item['id'] not in eligible:
+                unresolved = sorted(qid for qid in dependencies[item['id']] if questions[qid]['state'] not in {'answered', 'out_of_scope'})
+                body += '<small>Resolve prerequisites first: ' + esc(', '.join(unresolved)) + '.</small>'
+            body += '</li>'
+        body += '</ul></details></section>'
     if status['draft']:
         value = status['draft']
         body += views.example_map(value, status['checks'].get('scenario_index'), status['open_questions'])
@@ -153,7 +194,7 @@ def render_status(status, csrf, model_enabled, planned=None, plan_error=None, *,
     if role in {'author', 'reviewer'}:
         action = 'submit' if role == 'author' else 'review'
         body += '<section><details><summary>Analyst tools: structured ' + action + '</summary>' + make(action, field('json', 'Validated ' + action + ' JSON', textarea=True), 'Submit ' + action) + '</details>'
-        body += '<details><summary>Add a targeted owner question</summary>' + make('ask', field('question_id', 'New question ID') + field('text', 'Question in plain language') + field('why', 'Why this affects behavior or testing') + field('impact', 'Impact (1–5)', '3', kind='number'), 'Ask a decision-focused question') + '</details></section>'
+        body += '<details><summary>Add a targeted owner question</summary>' + make('ask', field('question_id', 'New question ID') + field('text', 'Question in plain language') + field('why', 'Why this affects behavior or testing') + field('impact', 'Impact (1–5)', '3', kind='number') + field('prerequisites', 'Prerequisite question IDs (optional)', required=False, hint='Separate existing IDs with spaces or commas.'), 'Ask a decision-focused question') + '</details></section>'
     if role == 'operator':
         body += '<section><h2>Approval and handoff</h2>'
         if plan_error:
@@ -298,7 +339,7 @@ class Handler(BaseHTTPRequestHandler):
                     except ValidationError as exc:
                         error = str(exc)
                 stage = 'draft' if status['actor']['role'] == 'author' else 'review'
-                return self.respond(200, render_status(status, session['csrf'], self.server.providers[stage] is not None, planned, error, models=w.records(token, 'model'), sources=w.records(token, 'source'), jobs=self.server.jobs.list(token, bits[1]), root=self.server.controller.root))
+                return self.respond(200, render_status(status, session['csrf'], self.server.providers[stage] is not None, planned, error, models=w.records(token, 'model'), sources=w.records(token, 'source'), jobs=self.server.jobs.list(token, bits[1]), root=self.server.controller.root, question_id=parse_qs(parts.query).get('question', [None])[0]))
             if len(bits) == 3 and bits[0] == 'export':
                 bundle = self.server.controller.exported(token, bits[1], int(bits[2]))
                 query = parse_qs(parts.query)
@@ -382,9 +423,11 @@ class Handler(BaseHTTPRequestHandler):
             require(len(bits) == 3 and bits[0] == 'run', 'Unknown action')
             rid, action = bits[1:]; version = int(data.pop('version'))
             # Never dynamically resolve a function name from untrusted input.
-            allowed = {'answer': {'question_id', 'answer'}, 'source': {'source_id', 'title', 'text', 'locator'}, 'attach': {'source_id', 'supersedes'}, 'confirm-source': {'source_id', 'source_digest', 'reason'}, 'submit': {'json'}, 'assistant': {'json', 'context_digest'}, 'review': {'json'}, 'model': {'stage'}, 'model-profile': {'stage', 'profile'}, 'ask': {'question_id', 'text', 'why', 'impact'}, 'signal': {'finding_id', 'reason'}, 'cycle': {'reason'}, 'approve': {'profile', 'plan_digest'}, 'seal': {'approval_id'}, 'resolve-question': {'question_id', 'resolution', 'target', 'reason'}}
+            allowed = {'answer': {'question_id', 'answer', 'response_kind', 'decision_owner'}, 'source': {'source_id', 'title', 'text', 'locator'}, 'attach': {'source_id', 'supersedes'}, 'confirm-source': {'source_id', 'source_digest', 'reason'}, 'submit': {'json'}, 'assistant': {'json', 'context_digest'}, 'review': {'json'}, 'model': {'stage'}, 'model-profile': {'stage', 'profile'}, 'ask': {'question_id', 'text', 'why', 'impact', 'prerequisites'}, 'signal': {'finding_id', 'reason'}, 'cycle': {'reason'}, 'approve': {'profile', 'plan_digest'}, 'seal': {'approval_id'}, 'resolve-question': {'question_id', 'resolution', 'target', 'reason'}}
+            allowed['exclude-response-history'] = {'question_id', 'response_digest', 'reason'}
             require(action in allowed and set(data) == allowed[action], 'Invalid action fields')
-            if action == 'answer': c.answer(token, rid, version, data['question_id'], data['answer'])
+            if action == 'answer': c.answer(token, rid, version, data['question_id'], data['answer'], response_kind=data['response_kind'], decision_owner=data['decision_owner'].strip() or None)
+            elif action == 'exclude-response-history': c.exclude_response_history(token, rid, version, data['question_id'], data['response_digest'], data['reason'])
             elif action == 'source': c.add_source(token, rid, version, data['source_id'], data['title'], data['text'], data['locator'])
             elif action == 'attach':
                 source_id, source_version = data['source_id'].split('|')
@@ -393,7 +436,7 @@ class Handler(BaseHTTPRequestHandler):
             elif action == 'confirm-source': c.confirm_source(token, rid, version, data['source_id'], data['source_digest'], data['reason'])
             elif action == 'submit': c.submit(token, rid, version, decode(data['json']))
             elif action == 'review': c.review(token, rid, version, decode(data['json']))
-            elif action == 'ask': c.ask(token, rid, version, {'id': data['question_id'], 'text': data['text'], 'why': data['why'], 'impact': int(data['impact'])})
+            elif action == 'ask': c.ask(token, rid, version, {'id': data['question_id'], 'text': data['text'], 'why': data['why'], 'impact': int(data['impact']), 'prerequisites': data['prerequisites'].replace(',', ' ').split()})
             elif action == 'signal': c.resolve_signal(token, rid, version, data['finding_id'], data['reason'])
             elif action == 'cycle': c.new_cycle(token, rid, version, data['reason'])
             elif action == 'resolve-question': c.resolve_question(token, rid, version, data['question_id'], data['resolution'], data['target'] or None, data['reason'])

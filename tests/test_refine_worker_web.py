@@ -245,6 +245,6 @@ class WorkbenchTests(Fixture):
         self.c.ask(self.a, 'REQ1', self.version(), self.question())
         _, _, body = self.request(path='/run/REQ1')
         # An author page may have no model but still includes advanced import form.
-        result = self.request('POST', '/run/REQ1/answer', {'csrf': self.csrf(body), 'version': self.version(), 'question_id': 'Q1', 'answer': 'Invent an owner decision.'})
+        result = self.request('POST', '/run/REQ1/answer', {'csrf': self.csrf(body), 'version': self.version(), 'question_id': 'Q1', 'answer': 'Invent an owner decision.', 'response_kind': 'confirmed', 'decision_owner': ''})
         self.assertEqual(result[0], 400)
         self.assertEqual(self.status()['context']['questions']['Q1']['state'], 'open')

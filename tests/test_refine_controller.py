@@ -135,8 +135,9 @@ class ControllerTests(Fixture):
 
     def test_answer_requires_new_revision_and_review(self):
         value = self.confirmed(); self.c.ask(self.a, 'REQ1', self.version(), self.question())
-        self.c.submit(self.a, 'REQ1', self.version(), value)
         self.c.answer(self.o, 'REQ1', self.version(), 'Q1', 'Cancellation closes at the start time.')
+        self.c.submit(self.a, 'REQ1', self.version(), value)
+        self.c.answer(self.o, 'REQ1', self.version(), 'Q1', 'Correction: cancellation closes one hour before the start time.')
         self.assertTrue(self.status()['stale'])
         with self.assertRaises(ValidationError): self.c.review(self.r, 'REQ1', self.version(), assessment(value))
 
@@ -148,9 +149,12 @@ class ControllerTests(Fixture):
 
     def test_every_question_remains_in_controller_not_draft_control(self):
         value = self.confirmed(); self.c.ask(self.a, 'REQ1', self.version(), self.question())
-        self.c.submit(self.a, 'REQ1', self.version(), value)
-        result = self.c.review(self.r, 'REQ1', self.version(), assessment(value))
-        self.assertIn('question:Q1', result['review']['quality']['blockers'])
+        before = self.version()
+        with self.assertRaisesRegex(ValidationError, 'Owner decisions are pending'):
+            self.c.submit(self.a, 'REQ1', self.version(), value)
+        self.assertEqual(self.status()['context']['questions']['Q1']['state'], 'open')
+        self.assertEqual(self.version(), before)
+        self.assertIsNone(self.status()['draft'])
 
     def test_no_self_review_even_with_correct_payload(self):
         value = self.confirmed(); self.c.submit(self.a, 'REQ1', self.version(), value)

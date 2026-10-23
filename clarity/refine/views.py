@@ -17,8 +17,8 @@ def field(name, label, value='', textarea=False, kind='text', required=True, hin
     return '<label>' + esc(label) + control + ('<small>' + esc(hint) + '</small>' if hint else '') + '</label>'
 
 
-def select(name, label, options, selected=''):
-    return '<label>' + esc(label) + '<select name="' + esc(name) + '">' + ''.join('<option value="' + esc(key) + '"' + (' selected' if str(key) == str(selected) else '') + '>' + esc(value) + '</option>' for key, value in options) + '</select></label>'
+def select(name, label, options, selected='', *, required=False):
+    return '<label>' + esc(label) + '<select name="' + esc(name) + '"' + (' required' if required else '') + '>' + ''.join('<option value="' + esc(key) + '"' + (' selected' if str(key) == str(selected) else '') + '>' + esc(value) + '</option>' for key, value in options) + '</select></label>'
 
 
 def form(action, csrf, content, button, hidden=None):
@@ -158,6 +158,8 @@ def assistant_panel(status, csrf, root):
     content += '<p>Ask your assistant: “Call clarity_get_task. Investigate the supplied sources, follow the contract and submit the result with clarity_submit_result. Ask consequential questions where facts are missing.”</p><p>For independent review, use a fresh reviewer conversation with the reviewer key.</p><a class="button secondary" href="/run/' + esc(rid) + '/task.json">Download task packet</a><details><summary>Import assistant result manually</summary>'
     if role == 'author':
         content += '<p>Author tasks use targeted revision when a draft exists. Optional packets: <a href="/run/' + esc(rid) + '/task.json?stage=intake">intake questions only</a> · <a href="/run/' + esc(rid) + '/task.json?stage=draft">complete draft</a>. For MCP, append <code>--stage intake</code> or <code>--stage draft</code> to the command arguments.</p>'
+        if status['open_questions']:
+            content += '<p class="notice">Owner decisions are pending. Use the intake-only packet or <code>--stage intake</code> to reconsider necessary follow-ups. Draft and revision tasks wait until these decisions are resolved.</p>'
     content += form('/run/' + rid + '/assistant', csrf, field('json', 'Assistant JSON result', textarea=True), 'Validate and record assistant result', {'version': run['version'], 'context_digest': status['context_digest']}) + '</details></details></section>'
     return content
 

@@ -1,5 +1,5 @@
 {
-  "version": 5,
+  "version": 6,
   "implemented_workflow_engine": true,
   "engine_scope": "Local configuration/source workbench, scoped coding-assistant MCP, bounded direct inference and exact Gherkin handoff",
   "entrypoints": {
@@ -38,10 +38,28 @@
   },
   "development_pipeline_integration": false,
   "model_orchestration_implemented": true,
-  "model_orchestration_scope": "Explicit host-assistant task/result bridge or bounded draft/review calls, with optional intake and digest-bound targeted revision; no automatic extra stages",
+  "model_orchestration_scope": "Explicit host-assistant task/result bridge or bounded draft/review calls, with optional intake that may reconsider open decisions and digest-bound targeted revision; no automatic extra stages",
   "all_ten_roles_automatically_dispatched": false,
   "canonical_acceptance_format": "gherkin",
   "quality_threshold_depends_on_user_expertise": false,
   "live_xray_validated": false,
-  "assistant_bridge_implemented": true
+  "assistant_bridge_implemented": true,
+  "po_clarification": {
+    "shared_contract": ".github/skills/po-clarification/SKILL.md",
+    "author_task_resource": "po-clarification.md",
+    "question_prerequisites_persisted": true,
+    "response_kinds": [
+      "confirmed",
+      "partial",
+      "unknown",
+      "proposal",
+      "needs_owner"
+    ],
+    "only_confirmed_responses_create_decision_sources": true,
+    "changed_prerequisites_reopen_confirmed_descendants": true,
+    "open_decisions_block_draft_submission": true,
+    "explicit_intake_with_open_decisions": true,
+    "automatic_followup_calls": false,
+    "operator_history_exclusion_preserves_audit": true
+  }
 }

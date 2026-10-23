@@ -202,10 +202,12 @@ class RevisionTests(Fixture):
         self.assertEqual(result['run']['calls'], 1)
         with self.assertRaises(ValidationError): self.c.plan(self.o, 'REQ1')
 
-    def test_intake_questions_pause_further_calls_and_wrong_role_cannot_run_intake(self):
+    def test_intake_questions_pause_drafting_but_allow_explicit_author_reconsideration(self):
         result = run_stage(self.c, self.a, 'REQ1', self.version(), 'intake', FakeProvider({'questions': [self.question()], 'ready_to_draft': False}))
         self.assertEqual(len(result['open_questions']), 1)
-        with self.assertRaises(ValidationError): preflight(self.status(), 'intake')
+        for stage in ('draft', 'revise'):
+            with self.assertRaises(ValidationError): preflight(self.status(), stage)
+        self.assertEqual(preflight(self.status(), 'intake')['task'], 'intake')
         self.c.answer(self.o, 'REQ1', self.version(), 'Q1', 'Only before the booking starts.')
         provider = FakeProvider(error=True)
         with self.assertRaises(ValidationError): run_stage(self.c, self.r, 'REQ1', self.version(), 'intake', provider)

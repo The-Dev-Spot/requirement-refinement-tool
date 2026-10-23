@@ -23,7 +23,9 @@ Add a source connection if needed. Otherwise the source library accepts pasted
 text or UTF-8 text/Markdown files. Configure project risk IDs, reusable steps and
 call/rewrite budgets in **Project quality settings**. Defaults allow six model
 calls and three rewrites per cycle. The ten specialist definitions are available
-as references; they are not all automatically invoked.
+as references. The three PO profiles use one shared clarification contract, also
+included once in direct-model and scoped assistant author tasks. The application
+does not automatically invoke all ten profiles or install native host skills.
 
 ## Capture, investigate and decide
 
@@ -34,19 +36,73 @@ as references; they are not all automatically invoked.
    or replaces an attached reference.
 3. Connect your assistant or select a saved model on the requirement page.
    The packet contains only the selected evidence, decisions, current policy and
-   output contract. A pending decision pauses further model drafting.
+   output contract. A pending decision pauses drafting and revision; optional intake
+   can reconsider which follow-ups are necessary.
 4. Sign in as operator. Confirm source applicability with a reason, then answer the
    next question. Each question explains why the answer affects behavior or testing.
+   Choose **Response type**: confirmed, partial, unknown, a proposal or needs
+   another decision owner. Only a confirmed response settles the question.
    Resolve duplicates or scope exclusions explicitly; unanswered facts are not assumed.
-5. Return to the author role and draft again using the updated context.
+5. Once pending decisions are resolved, return to the author role and draft again
+   using the updated context.
 
 For an existing draft, **Revise changed items only** returns a digest-bound edit.
 Clarity assembles the full draft locally and requires a fresh independent review.
 Use the complete-draft action for a larger rewrite. **Check missing decisions only**
-is optional: it produces questions or intake advice, never a requirement or approval.
+is optional: it produces necessary new questions or intake advice, never a requirement
+or approval. It may run while questions are pending. If recorded questions already
+cover the gaps, it adds none and reports that decisions are still needed. Each run
+is explicit and counts against the existing call budget; it does not start another
+interview or automatically continue after an answer.
 Complete briefs can go straight to drafting without this extra call. Profiles can
 be restricted to one stage and have separate output limits; no model is selected
 or escalated automatically. Inspect the estimated context budgets before running.
+
+### Clarify what an answer actually settles
+
+The PO Analyst investigates selected applicable evidence; the Challenger chooses
+consequential questions; the Responder checks answers for conditions, gaps,
+contradictions and effects on other decisions. They share the existing question and
+decision history. Assistance can be more guided or concise while the final requirement
+and Gherkin quality standard stays the same.
+
+Earlier distinct responses remain visible as historical context for follow-up,
+including partial information supplied before a later referral. They do not become
+current decision sources. Repeated identical responses are not duplicated in model
+context; the full chronological audit remains intact. Input budgets still apply,
+and Clarity does not silently truncate selected context.
+
+If an earlier response contains a mistaken sensitive paste or no longer belongs in
+the selected context, an operator can open **Earlier responses (history only)** and
+choose **Exclude earlier response from context**, giving a reason. Exclusion keeps
+the original audit record, cannot remove a current answer or decision source, and
+invalidates any existing draft/review. Correct a current response first if needed.
+
+Questions carry stable IDs and prerequisite IDs. The live interview offers questions
+whose prerequisites are resolved, ranked by impact. A foundational choice should be
+asked before its dependent details; small batches suit independent decisions. Options
+explain tradeoffs without making a suggested answer the default. All open questions,
+including those waiting on prerequisites, continue to block drafting and handoff.
+
+| Response kind | Meaning | Question/source effect |
+| --- | --- | --- |
+| `confirmed` | The operator records an authorised business answer. | Settles the question and supplies an authoritative decision source. |
+| `partial` | Part of the decision is understood; a material remainder is unresolved. | Keeps the question open; records context without decision authority. |
+| `unknown` | No answer is known yet. | Keeps the question open without assuming a value. |
+| `proposal` | An option is suggested but not confirmed. | Keeps the question open; the suggestion cannot support an approved rule. |
+| `needs_owner` | A suitable decision owner must supply or confirm the answer. | Keeps the question open; an optional owner label helps route the question. |
+
+For example, “Probably, but operations needs to confirm” belongs in a proposal or
+needs-owner response. It does not establish the cancellation rule. An optional
+decision-owner label is descriptive; it does not authenticate that person or give
+them workspace access. Models may flag an apparently incomplete or contradictory
+confirmed answer, but only the operator records its disposition.
+
+When a confirmed prerequisite changes, affected confirmed dependent questions reopen
+for reconfirmation. Their previous answers remain in the audit history and visible
+context, but cannot support the current draft until reconfirmed. New questions use
+new IDs; existing questions need an explicit operator merge or scope resolution.
+No model can silently remove a question because it now appears unnecessary.
 
 A useful example-mapping session starts with the agreed rule, then asks for one
 ordinary example, a refusal/exception, an exact boundary and an alternative path.

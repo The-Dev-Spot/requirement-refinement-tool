@@ -8,6 +8,7 @@ RESOURCES = {
     'handoff-standard.md': 'docs/handoff-standard.md',
     'runtime-doc-contract.json': '.github/agents/runtime-doc-contract.json',
     'requirements.lock': 'requirements.lock',
+    'po-clarification.md': '.github/skills/po-clarification/SKILL.md',
 }
 
 
