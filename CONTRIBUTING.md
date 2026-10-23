@@ -33,9 +33,10 @@ live-model/client qualification in the PR.
 
 ## CI runner
 
-Core and browser CI target `[self-hosted, Linux, X64, host:r720-ai]` and use
+Core and browser CI run on GitHub-hosted `ubuntu-latest` runners, inside the same
 disposable Python Bookworm containers. Core checks retain Python 3.11 and 3.13;
-browser checks use Python 3.12. The runner needs Docker and repository access.
-Jobs run for main-branch pushes and same-repository pull requests. Branch pushes
-with an open PR do not duplicate the PR checks, and fork PRs do not execute on
-the personal runner. No GitHub-hosted fallback consumes hosted Actions minutes.
+browser checks use Python 3.12. Jobs run for main-branch pushes and same-repository
+pull requests, and branch pushes with an open PR do not duplicate the PR checks.
+They moved off the self-hosted `host:r720-ai` runner in October 2026: that runner
+deploys homelab services and only runs reviewed workflows from homelab repositories'
+`main` branches (homelab HOM-1659).
