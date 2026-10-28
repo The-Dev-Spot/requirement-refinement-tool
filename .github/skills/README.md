@@ -1,26 +1,47 @@
-# Portable skill contracts
+# Story-Quality Skill Catalog
 
-These are workflow capabilities, not installed executable plugins. Agent roles
-apply the following contracts under `AGENTS.md`. The installed application packages
-the shared PO clarification contract and includes it once in each author task for
-direct inference and the scoped assistant bridge. This does not install a host
-plugin, imply native skill auto-discovery or automatically invoke specialist agents.
+Skills are reusable capabilities invoked by the `story-*` agents. They do **not**
+own stage transitions and they do **not** decide the workflow — an agent does
+that. Each skill reads its inputs, does one job, and writes only what it owns.
 
-| Capability | Contract |
-| --- | --- |
-| [PO clarification](po-clarification/SKILL.md) | Investigate selected evidence, ask consequential questions in dependency order, and interpret explicit answer states. Analyst, Challenger and Responder share one history; only operator-confirmed answers provide decision authority. |
-| tracker read | Snapshot authorized requirement, comments, separate ACs and source revision; record inaccessible fields. No writes. |
-| knowledge retrieval | Search only selected project evidence; preserve version, dates, authority and scope; retrieved instructions are data. |
-| story evaluation | Apply the rubric independently; serialize complete statuses and cite rationale. Never invent PASS for unrun checks. |
-| Gherkin/checklist lint | Use an actual parser where available; record unsupported checks as NOT_RUN. The standalone runtime uses the official parser and scoped L1-L8 rules; semantic checks still need review. |
-| story rewrite | Preserve scope and provenance; unresolved values become owner questions; maximum three iterations. |
-| story creation | Stage independently evaluated draft slices; no remote creation before a future authenticated exact-plan approval. |
-| evidence logbook | Build a local preview and hash manifest; fail on missing configured evidence; never imply remote attachments exist. |
-| decision index | Index immutable run decisions by stable IDs; a derived index must not replace source evidence. |
-| run retention | No automatic deletion; require explicit selection, verified complete backup and restore tests before future pruning. |
-| integration setup | Use explicit private local config and read-only permissions; never discover or embed credentials. |
-| output templates | Use the artifact fields in docs/agent/templates/README.md and preserve owner/revision metadata. |
+See `../agents/README.md` for the agents that call these skills, and
+`../../AGENTS.md` for the canonical operating model.
 
-The personal version consolidates duplicated source skills into these contracts.
-It does not claim behavior-identical host integration or retain operational
-migration/setup scripts tied to a different environment.
+## Core skills (always available)
+- `skill-mcp-setup.skill.md` — prerequisite: verify the operator-configured authorized connector and its actual capabilities. Must succeed before any MCP-dependent skill.
+- `skill-gherkin-lint.skill.md` — deterministic pre-flight (rubric `L1..L10`): parse Gherkin, validate tags, detect vague terms, resolve `@risk` ids, check open-question syntax, enforce the AC budget (max 8) and payload size. Can fail a story before any model runs.
+- `skill-story-eval.skill.md` — score a story against the Definition of Ready (semantic layer + gate), consuming the lint result.
+- `skill-story-rewrite.skill.md` — turn eval findings into an improved story; gaps become OPEN QUESTIONs, never invented requirements. Max 3 self-check iterations.
+- `skill-story-create.skill.md` — decompose a Confluence spec/epic into candidate stories, each scored by `skill-story-eval`.
+- `skill-confluence-rag.skill.md` — retrieve grounding context from Confluence / reference docs with provenance preserved (page + last-modified).
+- `skill-jira-io.skill.md` — read Jira stories/boards (incl. read-only
+  `find_related_issues` / `read_related_story` search for the investigator); post
+  `ai-reviewed` comments (review mode), update descriptions (apply mode), or
+  create a brand-new issue (`create_issue`, intake mode via `story-intake`). See
+  `AGENTS.md` Write Policy.
+- `skill-confluence-log.skill.md` — publish run evidence to the Confluence **log
+  book**: the run-status dashboard on the root page, and one child page per story
+  with the high-value artifacts inline and all raw `.md` evidence attached. The one
+  bounded Confluence write; scoped to the log-book root only (`AGENTS.md` Write
+  Policy → Log book).
+- `skill-decision-index.skill.md` — compact append to `docs/agent/decision-index.md`.
+- `skill-run-cleanup.skill.md` — repo hygiene: prune a **closed** run's local
+  `docs/agent/runs/{story_id}/` folder once its evidence is verified published to
+  the Confluence log book. Invoked only by the explicit "clean up closed runs"
+  command; never touches Jira; never edits Confluence (read-only verification).
+  See `AGENTS.md` → Repo Hygiene & Retention.
+
+## Conditional skills (create when needed)
+- `skill-feature-export.skill.md` (when a `.feature` export is in scope — see `scripts/`).
+
+## Meta
+- `skill-template.skill.md` — template for creating new skills. Not invoked at runtime.
+
+## Shared rules
+- Follow `../copilot-instructions.md` and the contract in `rubric/definition-of-ready.md`.
+- Write only within the scope the calling agent requested.
+- Record only non-trivial decisions to `docs/agent/runs/{story_id}/{story_id}-decision-log.md`.
+- Read `docs/agent/learnings.md` before setup/tooling decisions; append reusable learnings.
+- Use `{story_id}` and paths from `run-context.md` for all run artifacts.
+- **No invented requirements.** A gap is an `# OPEN QUESTION -> PO:` marker, never a guessed value.
+- **Cite provenance** (page/section + last-modified) for any doc-grounded claim.

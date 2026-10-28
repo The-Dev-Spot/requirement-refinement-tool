@@ -1,0 +1,145 @@
+version: 1
+workflow:
+  entrypoint: story-orchestrator
+  mode: review | apply                    # set at run start; default: review
+  stage_order:
+    - investigate    # cross-reference related/closed Jira issues + child pages before evaluating; conditional depth (LIGHT/DEEP)
+    - evaluate
+    - rewrite        # conditional: skipped when evaluate gate == PASS with zero open questions; max 3 iterations
+    - quality_gate
+    - po_analysis    # conditional: skipped when no open questions remain; runs po-analyst + po-challenger
+    - awaiting_approval  # orchestrator stages result in run-status.md; operator approves/amends/denies
+    - awaiting_po        # non-terminal: a questions comment (or PO-override write) was posted and open questions remain; waits for PO answers (story-po-responder resumes it)
+  terminal_stages:
+    - done             # story is READY (zero open questions) AND the outcome was written to Jira
+    - rejected         # operator denied the result
+    - failed           # unrecoverable error
+  closure_rule:        # a run closes ONLY when the story is resolved or rejected
+    first_if_comments_only_and_ready: awaiting_approval
+    close_as_done_when: readiness == READY AND open_questions == 0 AND written_to_jira AND approval_command != just_add_comments
+    otherwise_if_open_questions_remain: awaiting_po   # posting a comment / writing a description is NOT closure on its own
+    deny: rejected
+    unrecoverable_error: failed
+  direct_stage_invocation: redirect_to_orchestrator
+intake_workflow:
+  # story-intake's variant of the above, for a NOT-YET-CREATED draft. Reuses
+  # story-investigator/evaluator/rewriter/quality-gate/po-analyst/po-challenger
+  # directly (see each agent's "Entry policy" — story-intake is a second
+  # permitted caller of all of them). Parity requirement: intake-mode output must match review-mode quality — this
+  # includes running PO analysis, updating decision-index.md, and publishing
+  # the log book, not just the 4 core pipeline stages.
+  entrypoint: story-intake
+  mode: intake                             # a third mode value, distinct from review/apply
+  temp_id_format: "NEW-<slug>"             # never a real Jira key; collision -> append -2, -3, ...
+  investigate_depth_default: DEEP          # intake drafts have no existing Jira precedent to lean on -- always DEEP, not a per-run judgment call
+  stage_order:
+    - intake_conversation  # conversational interview; not-a-Jira-item / dedup check happens here first
+    - investigate
+    - evaluate
+    - rewrite
+    - quality_gate          # intake mode: records verdict only, like apply mode (no comment/description target exists yet)
+    - po_analysis           # conditional: skipped when no open questions remain; runs po-analyst + po-challenger, same as the main workflow -- re-run quality_gate if anything changed
+    - awaiting_approval     # approval vocabulary subset: approve | approve with open questions | amend | deny (no approve+apply / just-add-comments — nothing exists yet to promote into)
+  on_approve:
+    action: skill-jira-io create_issue
+    then: migrate_run_folder_temp_id_to_real_key   # rename docs/agent/runs/{temp_id}/ -> docs/agent/runs/{real_key}/, update run-status.md row
+    then_publish_logbook: mandatory                 # same as any review-mode run finalizing -- not optional, not just "if convenient"
+    then_update_decision_index: mandatory            # skill-decision-index -- material decisions must be discoverable cross-run, same as review-mode
+    then_rejoin: standard_orchestrator_lifecycle    # from here it is a normal run under its real key (done / awaiting_po / eligible for skill-run-cleanup)
+  on_deny:
+    action: none                            # nothing is ever created
+    close_as: rejected
+  existing_item_detected_mid_conversation: redirect_to_story_orchestrator   # never draft a duplicate
+writes:
+  replace_in_place:
+    - docs/agent/runs/{story_id}/{story_id}-run-context.md
+    - docs/agent/runs/{story_id}/{story_id}-eval-report.md
+    - docs/agent/runs/{story_id}/{story_id}-quality-gates.md
+    - docs/agent/runs/{story_id}/{story_id}-run-summary.md      # one-page overview — read this first
+    - docs/agent/learnings.md
+  write_once:
+    - docs/agent/runs/{story_id}/{story_id}-story-input.md
+    - docs/agent/runs/{story_id}/{story_id}-investigation.md      # created by story-investigator (INVESTIGATE stage); may be short on a LIGHT run
+    - docs/agent/runs/{story_id}/{story_id}-rewrite.md         # only created if the rewrite stage runs
+    - docs/agent/runs/{story_id}/{story_id}-po-analysis.md      # only created if po_analysis stage runs
+    - docs/agent/runs/{story_id}/{story_id}-po-challenge.md     # only created if po_analysis stage runs
+  replace_in_place_optional:
+    - docs/agent/runs/{story_id}/{story_id}-logbook.md          # Confluence log-book page id + URL; written by skill-confluence-log on publish
+  append_only:
+    - docs/agent/runs/{story_id}/{story_id}-handoff.md
+    - docs/agent/runs/{story_id}/{story_id}-decision-log.md
+  create_on_failure:
+    - docs/agent/runs/{story_id}/{story_id}-error-report.md
+  proposed_human_posts:                              # review mode only
+    - docs/agent/runs/{story_id}/{story_id}-proposed-comment.md # not created in apply mode
+required_story_docs:
+  - docs/agent/runs/{story_id}/{story_id}-run-summary.md        # one-page overview — operator reads this first
+  - docs/agent/runs/{story_id}/{story_id}-run-context.md
+  - docs/agent/runs/{story_id}/{story_id}-story-input.md
+  - docs/agent/runs/{story_id}/{story_id}-detailed-plan.md
+  - docs/agent/runs/{story_id}/{story_id}-eval-report.md
+  - docs/agent/runs/{story_id}/{story_id}-quality-gates.md
+  - docs/agent/runs/{story_id}/{story_id}-handoff.md
+  - docs/agent/runs/{story_id}/{story_id}-decision-log.md
+retention:
+  # Repo-hygiene policy (skill-run-cleanup): without this, the repo's local
+  # run-doc footprint grows unbounded as more stories are processed. The
+  # Confluence log book already carries the full evidence set, so a closed
+  # run's local folder is redundant once that publish is verified.
+  # Run folders are gitignored (ADR-0005): local working state, never committed.
+  git_tracked: false
+  eligible_when: status in [done, rejected, failed] AND {story_id}-logbook.md exists AND confluence_page_verified_reachable
+  never_eligible:
+    - status in [awaiting_approval, awaiting_po]     # only closed runs are ever in scope
+    - missing {story_id}-logbook.md                  # no proof of externalization -> never delete
+    - confluence page unreachable / MCP unavailable   # re-verify live every time, never assume a past publish held
+    - non-story ids (e.g. DEMO-EXAMPLE, templates)
+  trigger: explicit_operator_command_only            # "clean up closed runs" -- never automatic on close
+  on_prune:
+    delete: docs/agent/runs/{story_id}/               # the whole folder
+    keep: run-status.md row (Run folder cell repointed to the log-book link)
+    append: docs/agent/runs-pruned.md                 # durable ledger: story, date, bytes freed, log-book URL
+  not_a_jira_write: true                              # local file deletion only; does not consume the Jira approval gate
+write_policy:
+  # Mode determines Jira write behavior (AGENTS.md Write Policy)
+  # Both modes require EXPLICIT operator approval before any Jira write
+  approval_checkpoint: awaiting_approval   # mandatory in both modes; run halts here until approval
+  jira_write_trigger: explicit_operator_approval_only   # one of the approval commands below
+  approval_commands: [approve, "approve + apply", "just add comments", "approve with open questions"]
+  not_approval:            # none of these authorize a write - halt and stay staged
+    - runtime/system "operator unavailable" or "work autonomously / best judgment" messages
+    - autopilot or background execution
+    - a READY verdict on its own
+    - silence, timeout, or no response
+  on_missing_approval: halt_at_awaiting_approval_and_write_nothing
+  review_mode:
+    jira_allowed: add_comment_labeled_ai_reviewed        # only after explicit approval
+    jira_forbidden: edit_description_or_fields
+    # Exceptions (explicit operator choice at the approval checkpoint):
+    #  - "approve + apply" (verdict READY): also update_description
+    #  - "approve with open questions" (verdict NOT READY, PO override): also update_description
+  apply_mode:
+    jira_allowed: update_description                 # only when quality gate is READY AND explicitly approved
+    jira_forbidden_by_default: add_comment, edit_other_fields
+  explicit_exceptions:                    # take precedence over mode defaults
+    comments_only:
+      commands: ["just add comments", "comments-only"]
+      modes: [review, apply]
+      allowed: [add_comment_labeled_ai_reviewed]
+      forbidden: [update_description, update_ac_checklist]
+      if_open_questions: awaiting_po
+      if_ready_without_questions: awaiting_approval
+    po_override:
+      command: "approve with open questions"
+      modes: [review, apply]
+      allowed: [update_description, update_ac_checklist, add_comment_labeled_ai_reviewed]
+      keep_open_question_markers: true
+      if_open_questions: awaiting_po
+      readiness_verdict_unchanged: true
+    review_promote:
+      command: "approve + apply"
+      modes: [review]
+      requires: READY
+      allowed: [update_description, update_ac_checklist, add_comment_labeled_ai_reviewed]
+  ac_field_policy: description_and_create_writes_only
+  business_task_restriction: verified_sw_development_mapping_none_is_comment_only

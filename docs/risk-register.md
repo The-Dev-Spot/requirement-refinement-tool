@@ -1,10 +1,12 @@
-# Synthetic risk register
+# Risk register
 
-These are illustrative risks, not an inherited business policy. Replace them
-with reviewed project risks before substantive evaluation.
+No project risks or organizational policies are shipped. Populate this register
+from authorized, applicable project sources before relying on risk coverage.
+An empty register means unknown coverage, not that the project has no risks.
 
-| ID | Risk | Example failure evidence |
-| --- | --- | --- |
-| RISK-001 | Unauthorized access to private requirements | Access denied for an unauthorized identity. |
-| RISK-002 | Duplicate external creation after retry | Reconciliation finds one issue for an idempotency key. |
-| RISK-003 | Stale approval publishes changed content | Revision or payload mismatch blocks publication. |
+| id | risk | applies when | mandatory negative outcome | source, section, source date, locator |
+| --- | --- | --- | --- | --- |
+
+Use stable `RISK-...` identifiers. Preserve D5's risk-to-negative-AC mapping in
+review evidence. Do not invent a mandatory policy or threshold to fill this table.
+Keep real source material private; do not publish a project risk register here.
