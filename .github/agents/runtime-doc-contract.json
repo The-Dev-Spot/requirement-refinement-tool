@@ -1,5 +1,5 @@
 {
-  "version": 6,
+  "version": 7,
   "implemented_workflow_engine": true,
   "engine_scope": "Local configuration/source workbench, scoped coding-assistant MCP, bounded direct inference and exact Gherkin handoff",
   "entrypoints": {
@@ -61,5 +61,26 @@
     "explicit_intake_with_open_decisions": true,
     "automatic_followup_calls": false,
     "operator_history_exclusion_preserves_audit": true
+  },
+  "developer_delivery": {
+    "files": [
+      "requirement.md",
+      "acceptance.feature"
+    ],
+    "audit_separate": true,
+    "statement_text_preserved": true,
+    "canonical_gherkin_bytes_preserved": true,
+    "target_scenarios": [
+      3,
+      6
+    ],
+    "max_scenarios": 8,
+    "outline_counts_as_one": true,
+    "character_scope": "both_delivery_files_unicode_characters",
+    "target_characters": 8000,
+    "warn_above_characters": 10000,
+    "block_above_characters": 20000,
+    "automatic_split_or_truncation": false,
+    "cold_read_uses_delivery_only": true
   }
 }

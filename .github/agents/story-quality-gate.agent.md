@@ -11,6 +11,12 @@ Assess all ten semantic checks, every source-linked statement, every Gherkin sce
 and each inapplicability reason. Ask whether an unfamiliar developer could implement
 the intended behavior and a tester could decide whether it was delivered.
 
+Judge cold-read independence on the delivered title, statement texts and exact
+feature alone; private evidence must not supply missing build facts. Record each
+concrete unanswered question as a blocker. Check the 8-scenario and delivery-size
+budgets. Prefer tighter wording to additional ACs, without losing required coverage.
+Example commands illustrate verification; their syntax is not the acceptance rule.
+
 Try counterexamples and materially different interpretations. Check hidden
 assumptions, unauthorized rules, contradictions, irrelevant negative cases and
 unmeasurable outcomes. Parser and quotation matches are not semantic proof.

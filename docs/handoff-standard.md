@@ -13,6 +13,40 @@ applicability decision. Source hashes and exact quotations detect stale or inven
 passages; independent semantic review determines whether the passage supports the
 statement. Neither a hash nor a lengthy rationale proves that judgment is correct.
 
+## Compact developer delivery
+
+`requirement.md` groups the exact statement texts into Objective, Scope (In/Out),
+Build details and Dependencies, omitting empty optional sections. It links to the
+canonical `acceptance.feature`; scenarios are not duplicated or paraphrased into a
+checklist. Full statement IDs, source quotations/digests, risk/coverage mappings and
+review rationales stay in the sealed audit bundle. Removing repeated source labels
+and per-statement headings is deterministic rendering, not a model summary.
+
+Keep everything a developer needs to build and verify in these two files: values,
+decisions, constraints, applicable definitions, outcomes and blocking dependencies.
+Keep why/where-from in structured citations and review evidence. Do not add a
+glossary, source table, confidence ratings or review narrative to the delivery text.
+Explain terms where they are used. Existing valid source-linked statements are
+never truncated or silently removed during rendering.
+
+Target 3–6 acceptance Scenario/Outline definitions; **more than 8 blocks delivery**
+(`ac_budget`, L9). An Outline counts once even when it compiles to several test
+cases; parser/example limits and complete rule coverage still apply. Do not pad a
+small requirement to three scenarios or combine unrelated outcomes to evade limits.
+If necessary behavior cannot fit, obtain an owner decision to split the requirement.
+
+Target **8,000 characters across requirement.md and acceptance.feature combined**.
+Over 10,000 raises `payload_size` warning; over 20,000 is an objective blocker
+(L10). Counts include markup, comments, whitespace and exact feature line endings,
+using Unicode characters rather than bytes. Measuring both files prevents hiding
+length in the feature. `payload_metrics` records the measured values. These are
+local Markdown/Gherkin budgets, not Jira wiki-conversion limits. The 250-character
+checklist limit does not apply: this product's final criteria remain Gherkin.
+
+Fix findings by tightening or merging repetition before adding text; never trade
+coverage or buildability for size. Warnings need an exact independent rationale;
+hard budget failures cannot be waived. Short text does not establish correctness.
+
 ## Acceptance criteria
 
 Gherkin is canonical, not an optional alternative to a final checklist. Supporting
@@ -38,6 +72,11 @@ coverage matrix to the actual parsed scenarios, not a parallel unverified list.
 The reviewer receives the draft and sources without a writer self-score. It checks
 intent, cold-read independence, precision, scope, unsupported additions, observable
 outcomes, dependencies, non-functional constraints, applicability and coverage.
+For cold-read independence, use only the delivered title, statement texts and exact
+feature, without relying on citations or private audit evidence for missing build
+facts. Record concrete unanswered build/verification questions as a FAIL. Use full
+evidence separately to judge support and fidelity. Judge observable outcomes rather
+than the syntax of optional example verification commands.
 Every statement and scenario receives a separate support/fidelity judgment. The
 counterexample challenge asks whether materially different implementations could
 both satisfy the wording. Any unresolved material ambiguity blocks the handoff.
@@ -56,6 +95,9 @@ The operator sees and approves the exact plan and hashes. The bundle contains
 line endings—are the same bytes approved as acceptance criteria. There is no
 second-model test-case rewrite. Only approved bundles can be obtained from the
 controller's export route; repeated retrieval returns the stored bundle.
+The compact renderer participates in the quality implementation digest and exact
+file hashes. An implementation update requires fresh drafting/review/approval for
+open runs; already sealed bundles remain byte-identical and are never regenerated.
 
 The Cucumber, Xray Cloud and Xray Server/DC profiles identify the intended import
 route, not live compatibility certification. Import **only acceptance.feature**;

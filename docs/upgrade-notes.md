@@ -50,3 +50,14 @@ Repository settings are separate from code. Require review and passing checks in
 branch protection/rulesets before merging. This change does not silently modify
 repository administration or merge itself. Keep the release in review while the
 remaining environment qualification is performed.
+
+
+## Compact developer requirements
+
+Newly approved handoffs use shorter grouped narrative without repeated statement
+headings or source labels. The exact statement texts and canonical feature remain;
+full citations, IDs, coverage and independent review stay in the audit download.
+Current refinement runs target 3–6 scenarios (max 8) and 8,000 total delivery
+characters (warning above 10,000, blocker above 20,000). Open runs need a fresh
+draft and independent review after this quality-implementation update. Existing
+sealed handoffs retain their original bytes; no automatic rewrite or migration runs.

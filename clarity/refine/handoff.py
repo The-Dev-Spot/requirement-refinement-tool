@@ -6,7 +6,8 @@ import json
 import zipfile
 
 from ..guardrails import canonical, digest
-from .contracts import KINDS, require
+from .contracts import require
+from .payload import requirement_text
 
 PROFILES = {'cucumber', 'xray-cloud', 'xray-server-dc'}
 
@@ -14,16 +15,9 @@ PROFILES = {'cucumber', 'xray-cloud', 'xray-server-dc'}
 def plan_files(run, current, context, assessed, profile):
     require(profile in PROFILES, "Choose cucumber, xray-cloud or xray-server-dc explicitly")
     value = current['data']['draft']
-    lines = ['# ' + value['title'], '', 'Approved acceptance criteria are in acceptance.feature. They are not regenerated for testing.', '']
-    for kind in ('problem', 'value', 'scope', 'exclusion', 'definition', 'rule', 'constraint', 'dependency'):
-        statements = [s for s in value['statements'] if s['kind'] == kind]
-        if statements:
-            lines += ['## ' + kind.title(), '']
-        for statement in statements:
-            lines += ['### ' + statement['id'], '', statement['text'], '', 'Sources: ' + ', '.join(c['source_id'] for c in statement['citations']), '']
     trace = {'statements': value['statements'], 'scenario_mappings': value['scenarios'], 'coverage': value['coverage'], 'draft_digest': digest(value)}
     files = {
-        'requirement.md': '\n'.join(lines),
+        'requirement.md': requirement_text(value),
         # Preserve even trailing newlines and CRLF; hash and export the approved bytes.
         'acceptance.feature': value['feature'],
         'traceability.json': canonical(trace) + '\n',

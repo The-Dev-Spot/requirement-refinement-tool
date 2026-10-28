@@ -78,6 +78,17 @@ source-linked problem, value, scope, exclusions and rules, plus relevant definit
 dependencies and non-functional constraints. Do not invent irrelevant constraints
 to fill headings. Review their applicability explicitly.
 
+Keep developer delivery lean: objective, scope, necessary build details and blocking
+dependencies, plus the canonical acceptance.feature. Keep statement IDs, citations,
+coverage mappings and review rationale in the sealed audit bundle. Never remove a
+build-relevant fact to shorten delivery. Target 3–6 Scenario/Outline definitions,
+maximum 8; target 8,000 characters across both delivery files, warning above 10,000
+and blocker above 20,000. Outlines count once; unrelated outcomes must not be hidden
+in Examples. Tighten repetition before adding text. If necessary behavior cannot fit,
+ask the owner to split the requirement; no automatic scope change or truncation.
+The cold-read check uses the delivery text alone; evidence justifies that text and
+cannot substitute for missing build instructions. Existing sealed bytes stay intact.
+
 Each Gherkin Scenario/Outline has one stable direct `@case_ID` tag. Use observable
 Given/When/Then behavior, not vague success claims. Cover applicable positive,
 negative, boundary and alternative behavior for every rule/constraint. Where a

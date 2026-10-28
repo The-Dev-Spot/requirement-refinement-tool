@@ -16,6 +16,12 @@ Gherkin with stable scenario tags, observable outcomes and relevant failure/boun
 cases. Every rule/constraint needs explicit applicability/coverage decisions.
 Unknown behavior remains an owner question, not an acceptance criterion guess.
 
+Tighten or merge repetition before adding text. Target 3–6 Scenario/Outline
+definitions, maximum 8, and 8,000 characters across the two delivery files.
+Citations and review rationale stay in structured evidence, outside developer text.
+Keep every build-relevant fact and required outcome; ask the owner to split work
+that cannot fit. Never silently drop coverage, scope or an approved scenario.
+
 Respect the rewrite budget. Submit a new immutable revision for independent review;
 never overwrite an approved artifact, waive a finding, authorize reference material,
 or write an external issue. Final checklist-only exports are legacy, not this product.

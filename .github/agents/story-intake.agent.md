@@ -21,6 +21,10 @@ rules and relevant constraints/dependencies. Supply precise Gherkin and explicit
 rule-to-scenario coverage. Submit for the same independent review as any expert
 input. A receptionist's brief may need more assistance, never weaker acceptance.
 
+Use the compact delivery contract: target 3–6 Scenario/Outline definitions, max 8,
+with build-relevant prose and full evidence kept separately. A size problem calls
+for tighter writing or an explicit owner decision to split, never weaker coverage.
+
 All behavior is subordinate to `AGENTS.md`. Read `docs/handoff-standard.md` and
 `docs/refinement-workflow.md`. Analyze locally; no controller credentials or external
 write permissions are granted by this profile.

@@ -8,6 +8,7 @@ from typing import Any
 from ..guardrails import digest
 from ..audit import SECRETS
 from .contracts import CATEGORIES, REQUIRED_KINDS, draft, require
+from .payload import MAX_CHARACTERS, MAX_SCENARIOS, WARN_CHARACTERS, payload_metrics
 
 SUSPICIOUS = re.compile(r"ignore\s+(?:all\s+)?(?:previous|prior)\s+instructions|(?:reveal|print|send)\s+(?:the\s+)?(?:secret|api.?key|password|token)|(?:bypass|disable)\s+(?:the\s+)?(?:approval|guardrail|safety)|system\s*:\s*you\s+are", re.I)
 VAGUE = re.compile(r"\b(?:quickly|fast|successfully|user.friendly|seamless|as appropriate|etc|reasonable|adequate|efficient)\b", re.I)
@@ -170,6 +171,13 @@ def check(value: dict, sources: dict[str, dict], selected_policy: dict) -> dict:
     except Exception:
         # Never echo source contents from third-party parser exception messages.
         flag("invalid_gherkin", "feature", "Feature failed parser or context/action/outcome, stable-ID, or outline checks")
+    metrics = payload_metrics(value, index)
+    if index and metrics['scenario_count'] > MAX_SCENARIOS:
+        flag('ac_budget', 'feature', 'More than 8 acceptance scenarios: tighten or propose a split without dropping required coverage')
+    if metrics['delivery_characters'] > MAX_CHARACTERS:
+        flag('payload_size', 'handoff', 'Developer delivery exceeds 20,000 characters: revise or split; never truncate build-relevant text')
+    elif metrics['delivery_characters'] > WARN_CHARACTERS:
+        flag('payload_size', 'handoff', 'Developer delivery exceeds 10,000 characters; target 8,000 and justify any necessary excess', 'warning')
     mappings = {s["id"]: s for s in value["scenarios"]}
     rules = {s["id"] for s in statements.values() if s["kind"] in {"rule", "constraint"}}
     if index:
@@ -219,4 +227,4 @@ def check(value: dict, sources: dict[str, dict], selected_policy: dict) -> dict:
     if any(pattern.search(str(value) + str(sources)) for pattern in SECRETS):
         flag("credential_literal", "evidence", "Remove credential-like literals before model processing or handoff")
     findings += signals({"draft": value, "sources": sources})
-    return {"draft_digest": digest(value), "findings": findings, "scenario_index": index, "semantic_truth_verified": False}
+    return {"draft_digest": digest(value), "findings": findings, "scenario_index": index, "payload_metrics": metrics, "semantic_truth_verified": False}

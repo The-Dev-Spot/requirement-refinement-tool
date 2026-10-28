@@ -95,3 +95,12 @@ Context-sensitive wording warnings can be resolved with exact recorded rationale
 objective failures and missing owner decisions cannot. Suspicious-text signals
 require a separate operator adjudication bound to the exact draft and evidence.
 READY still does not authorize approval or export.
+
+
+For current refinement runs, proportionality adds L9 (`ac_budget`: more than 8
+Scenario/Outline definitions is a blocker) and L10 (`payload_size`: combined
+Markdown/Gherkin delivery over 10,000 characters is a warning, over 20,000 a
+blocker; target 8,000). These executable checks live in `clarity/refine/checks.py`
+and `payload.py`; the legacy snapshot linter retains its L1–L8 contract.
+The cold-read check uses delivered text only; full supporting evidence remains
+mandatory in the sealed audit bundle. Tighten or propose a split; never truncate.
