@@ -1,5 +1,0 @@
-include AGENTS.md requirements.lock build_support.py
-include docs/handoff-standard.md
-include .github/agents/runtime-doc-contract.json
-include .github/skills/po-clarification/SKILL.md
-recursive-include clarity/assets *.css *.js

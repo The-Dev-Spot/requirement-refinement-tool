@@ -1,37 +1,34 @@
-# Credentials and machine configuration
+# Credentials and private connection/project configuration
 .env
 .env.*
 !.env.example
 *.secret
 secrets/
 .github/mcp.json
-.github/project-config.local.json
+.github/project-config.local.yaml
+.vscode/
 .claude/
 .idea/
-.vscode/
-# Private evidence and run state must never enter source history
-.clarity/
-knowledge/private/
-docs/agent/runs/
+# Source documents and live operational state never belong in Git
+Reference/private/
+docs/agent/runs/*
+!docs/agent/runs/.gitkeep
+docs/agent/run-status.md
+docs/agent/decision-index.md
+docs/agent/learnings.md
+docs/agent/runs-pruned.md
+work/
 *.log
-# Toolchains and editor output
-__pycache__/
-*.py[cod]
-.venv/
-venv/
-node_modules/
-.DS_Store
-Thumbs.db
+*.key
+*.sqlite*
 *.zip
 *.docx
 *.pptx
 *.pdf
-
-# Standalone private state and capability files
-*.sqlite*
-*.key
-*.backup.json
-*.review.html
-build/
-dist/
-*.egg-info/
+# Developer output
+node_modules/
+__pycache__/
+*.py[cod]
+.DS_Store
+Thumbs.db
+out/

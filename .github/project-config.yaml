@@ -1,0 +1,65 @@
+# Neutral example only. Copy to project-config.local.yaml for real identifiers.
+# AGENTS.md describes loading the ignored local override. No credentials here.
+version: 1
+jira:
+  base_url: "https://jira.example.invalid"
+  project_key: "DEMO"
+  board_id: null
+  teams: []
+  custom_fields:
+    ac_checklist: null
+    ac_legacy: null
+    feature_team: null
+    categorization: null
+    region: null
+    request_source: null
+    sw_development: null
+    test_status: null
+    parent_link: null
+  sw_development:
+    field: null
+    behavioral_value: null
+  labels:
+    reviewed: "ai-reviewed"
+    in_scope: null
+  review_scan:
+    jql: "project = DEMO AND issuetype = Story AND status = Open"
+    default_limit: 5
+    require_unassigned: false
+  comment:
+    language: "en"
+    questions_only: true
+    mention_reporter: true
+    mention_assignee: false
+    mention_in_batch: false
+  intake:
+    issue_type: "Story"
+    content_language: "en"
+    default_labels: []
+    default_assignee: null
+    description_footer: null
+confluence:
+  base_url: "https://confluence.example.invalid"
+  spaces: []
+  seed_pages: []
+  log_book:
+    root_page_id: null
+    space_key: null
+    dashboard_source: "docs/agent/run-status.md"
+    story_page_title_format: "{story_id} - {summary}"
+    attach_evidence: true
+    inline_sections:
+      - run-summary
+      - rewrite
+      - proposed-comment
+    write_scope_note: "Only the explicitly configured log-book subtree. Grounding/spec pages are read-only."
+initiatives: []
+domain:
+  name: "Your project"
+  description: "Supply the project's own context; do not infer it from examples."
+  product_lines: []
+# Porting checklist: configure your URLs, project/board/team scope and field map;
+# verify rendering and checklist write shape; select permitted knowledge spaces;
+# create/verify a dedicated evidence root; confirm language, labels and intake defaults.
+# Leave optional integrations unset when using pasted/local evidence. An unset
+# destination or example.invalid host must never be used for a remote operation.

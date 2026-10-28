@@ -1,111 +1,62 @@
 # Clarity
 
-Turn a rough idea into a requirement people can build and test.
+Turn a rough idea into a clear, concise requirement that a team can build.
+Clarity asks the right questions, checks the available context, and helps you
+spot gaps before work starts.
 
-Clarity is a local application for capturing a need, selecting evidence, resolving
-business decisions and producing a reviewed developer handoff. Use Copilot, Codex,
-Claude Code or a locally hosted model. Every starting point meets the same final
-quality standard. Gherkin is the canonical acceptance format.
+## Get started
 
-## Start here
+Open this repository in your AI coding assistant and tell Clarity what you need:
 
-Requires Python 3.11+ on Linux, macOS or WSL with POSIX file permissions.
-From this checkout:
+> Help me write a requirement: I want to export my personal reading list.
 
-```sh
-python -m venv .venv
-. .venv/bin/activate
-python -m pip install --require-hashes --only-binary=:all: -r requirements.lock
-python -m pip install --require-hashes --only-binary=:all: -r requirements-build.lock
-python -m pip install --no-deps --no-build-isolation .
-clarity setup
-clarity start
-```
+> Review this requirement and tell me what is missing: [paste your text]
 
-Open **http://127.0.0.1:8765**. Setup prints the locations of three private login
-files: `author.key`, `reviewer.key` and `operator.key`. Paste a file's contents into
-**Workspace login key** to use that role. Sign out to switch roles.
+> Review DEMO-1234.
 
-1. Sign in as **operator**, then open **Setup** to configure your assistant/local
-   model, source connections and project quality settings.
-2. Sign in as **author**. Capture the problem in plain language and attach relevant
-   source versions. Connect your coding assistant or run a saved local model.
-3. Use **operator** to answer consequential questions and confirm source applicability.
-4. Use **reviewer** in a fresh assistant conversation to check the draft independently.
-5. Use **operator** to inspect and approve the exact handoff, then seal and download it.
+Clarity will guide you one question at a time. You do not need to choose its
+internal stages or learn the names of its agents. `DEMO-1234` is a fictional key;
+use your own project key when Jira is connected.
 
-Model use is opt-in. No model is downloaded or selected automatically.
-The workspace defaults to `~/.local/share/clarity`; use `--state /absolute/path`
-with setup, start and doctor to choose another private location.
+Start with the [quickstart](docs/agent/QUICKSTART.md). You can begin with pasted
+text; [connecting Jira and Confluence](docs/setup.md) is a separate setup step.
+No Python application or server installation is required.
 
-## Choose how to run
+## What you get
 
-| Option | How it connects | What you need |
-| --- | --- | --- |
-| Copilot in VS Code | Scoped stdio MCP server | Your configured Copilot client |
-| Codex | Scoped stdio MCP server | Your configured Codex client |
-| Claude Code | Scoped stdio MCP server | Your configured Claude Code client |
-| Ollama | `127.0.0.1:<port>/api/chat` | A running model with JSON-schema support |
-| LM Studio, vLLM or a custom local server | OpenAI-compatible Chat Completions on loopback | JSON-schema support and the exact model ID |
-| OpenAI or Anthropic API | Optional fixed HTTPS provider | An API key and explicit permission to send selected evidence |
+- A short requirement with the goal, scope, and clear acceptance criteria.
+- Questions where a decision or missing detail is still needed.
+- A separate review record with the sources and reasoning behind the requirement.
+- Control over what gets posted: Clarity asks for explicit approval before changing Jira.
 
-Open a requirement's **Connect your assistant** panel for client configuration.
-Assistant login stays in that client; subscriptions are not reused as API keys.
-The bridge exposes task retrieval, result submission and on-demand diagnostics for one requirement.
-It cannot answer owner questions, configure policy, approve or publish.
-See [assistant setup](docs/assistants.md) and [model setup](docs/models.md).
+Behavioral requirements use Given/When/Then examples. Other work uses measurable
+completion checklists. Clarity targets 3–6 acceptance criteria, with a maximum of
+8. It keeps the requirement concise without dropping details needed to build and
+test it. See the [fictional examples](examples/lean-requirement.md).
 
-## Sources and handoffs
+## Use Clarity your way
 
-Capture text or UTF-8 files in **Sources**, or explicitly read a selected Linear
-issue, Jira Cloud issue or Confluence Cloud page. Connections enforce the selected
-team, project or space. Captured versions retain their source locator, revision,
-effective date when known and retrieval time. An operator confirms applicability.
-Attach only the relevant excerpts; changes require a fresh draft and review.
+Review an existing story, develop a new requirement through conversation, or
+break a larger specification into smaller proposed stories. By default, an
+approved review posts questions as a comment. Updating the requirement itself
+requires the appropriate explicit approval and readiness checks. Nothing is
+posted just because a draft looks ready.
 
-The normal download contains **requirement.md** and the unchanged **acceptance.feature**.
-The full sealed audit bundle retains coverage, citations, selected evidence,
-independent review and a hash manifest; download it separately when needed. Approval binds
-that exact revision and expires after 15 minutes. Unresolved questions, unsupported
-claims and objective quality failures block delivery.
+[Everyday commands and approvals](docs/user-guide.md) ·
+[Connection setup](docs/setup.md) · [Privacy and security](SECURITY.md)
 
-Import only **acceptance.feature** into test management. The full audit ZIP contains
-selected evidence. Cucumber, Xray Cloud and Xray Server/DC profiles are local export choices;
-no tracker write or verified live import is implied. See [the Xray pilot](docs/xray-pilot.md).
+## For maintainers
 
-Optional [project collaboration tools](docs/project-collaboration.md) add approved,
-versioned glossaries, focused stakeholder questionnaires and a portable view of an
-already sealed handoff. These are local CLI operations; no development pipeline is
-required or automatically started.
+Clarity contains 10 agent profiles, 11 reusable skills, the Definition of Ready,
+and neutral templates. The full investigation, evaluation, rewrite, quality gate,
+and PO feedback workflow is retained. Missing tools or checks are reported;
+a draft is never described as verified when a required check could not run.
 
-## Guides
+[Operating rules](AGENTS.md) · [Agents](.github/agents/README.md) ·
+[Skills](.github/skills/README.md) · [Readiness rubric](rubric/definition-of-ready.md) ·
+[Contributing](CONTRIBUTING.md)
 
-- [First run and daily use](docs/refinement-workflow.md)
-- [Assistant connections](docs/assistants.md) and [local/cloud model setup](docs/models.md)
-- [Efficient model use, smaller handoffs and usage measurements](docs/efficiency.md)
-- [Project glossaries, stakeholder questionnaires and portable handoffs](docs/project-collaboration.md)
-- [Source management](docs/sources.md), [backup and recovery](docs/recovery.md), [troubleshooting](docs/troubleshooting.md)
-- [Handoff standard](docs/handoff-standard.md), [operating contract](AGENTS.md), [security](SECURITY.md)
-- [Quality evaluation](docs/evaluation.md), [architecture](docs/architecture.md), [remaining qualification](docs/roadmap.md)
-- [Prepare a clean recipient handover](docs/data-hygiene.md) and [upgrade checklist](docs/upgrade-notes.md)
-- [Specialist role library](.github/agents/README.md) and [contributing](CONTRIBUTING.md)
-
-## Development and verification
-
-```sh
-python -m unittest discover -s tests -v
-python -m clarity validate-config
-python -m clarity check-repo
-python -m pip install --require-hashes --only-binary=:all: -r requirements-build.lock
-python -m pip wheel --no-deps --no-build-isolation .
-```
-
-Stage new source files before the tracked-file hygiene scan. Browser checks have a
-separate [setup guide](tests/browser/README.md). Use [evaluation](docs/evaluation.md)
-to assess a chosen model; passing unit tests does not prove semantic correctness or
-equal real-world outcomes across input styles.
-
-This is one trusted local workspace. Keep the listener on loopback and keep private
-state out of shared repositories. It is not a hosted multi-user identity system.
-The older snapshot CLI remains for [compatibility](docs/standalone-workflow.md);
-its exports do not satisfy the current Gherkin handoff contract.
+The separate [clarity-end-goal](https://github.com/The-Dev-Spot/clarity-end-goal)
+repository preserves the full standalone Python application and its development
+setup. It is not required to use this Clarity toolkit; its access permissions are
+separate.

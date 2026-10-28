@@ -1,0 +1,12 @@
+{
+  "name": "clarity-toolkit-validation",
+  "private": true,
+  "type": "module",
+  "description": "Optional maintainer validation; not a runtime requirement",
+  "engines": { "node": ">=24" },
+  "dependencies": {
+    "@cucumber/gherkin": "42.0.1",
+    "@cucumber/messages": "34.0.0",
+    "yaml": "2.8.3"
+  }
+}

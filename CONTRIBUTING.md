@@ -1,42 +1,28 @@
 # Contributing
 
-Read [AGENTS.md](AGENTS.md) for the quality and authority contract. Prefer small,
-reviewable changes that improve the final requirement rather than its self-score.
+This repository is the assistant-operated Jira/Confluence toolkit. Preserve its
+agent, skill, mode, stage and approval behavior when changing neutral guidance.
+The standalone application is maintained in https://github.com/The-Dev-Spot/clarity-end-goal.
 
-Use Python 3.11+ on a POSIX system. Create a virtual environment, install the
-hash-locked runtime requirements, then `python -m pip install --no-deps -e .`.
+Keep examples fictional. Never commit live identifiers, private connections, run
+records, source documents, screenshots or credentials. Review the staged diff and
+privately scan for identifiers specific to your organization before submitting.
+
+Update affected agent instructions, skills, rubric and templates together. The
+lean payload and complete evidence separation must remain coherent end to end.
+Record unavailable tooling as NOT_RUN; do not claim a model judgment is deterministic.
+
+## Maintainer verification
+
+The optional validation dependencies live under `.github/validation/` and are
+not required to use the assistant workflow. With Node.js 24+:
 
 ```sh
-python -m unittest discover -s tests -v
-python -m clarity validate-config
-python -m clarity lint examples/checklist-requirement.json
-python -m clarity benchmark examples/rule-benchmark.json
-python -m clarity gate examples/complete-report.json
-python -m clarity check-repo
-python -m pip wheel --no-deps .
+cd .github/validation
+npm ci --ignore-scripts
+node check-toolkit.mjs
 ```
 
-Stage new source files before the tracked-file scan. Check the resulting wheel
-outside the checkout: setup, doctor and loopback startup must work without the
-repository's documentation paths. Follow the separate browser-test instructions
-for real-browser verification. Use the quality corpus for model/prompt changes;
-fixtures cannot establish semantic quality.
-
-Keep examples fictional and use reserved example domains. Do not commit keys,
-private state, live source data, logs or local MCP client settings. Update relevant
-guides and runtime contracts when behavior changes. Run meaningful regression tests
-for authority, stale context, output validation and recovery boundaries.
-
-No merge, public deployment, remote tracker write or automatic retention deletion
-is part of a local implementation change. Record actual validation and any remaining
-live-model/client qualification in the PR.
-
-## CI runner
-
-Core and browser CI run on GitHub-hosted `ubuntu-latest` runners, inside the same
-disposable Python Bookworm containers. Core checks retain Python 3.11 and 3.13;
-browser checks use Python 3.12. Jobs run for main-branch pushes and same-repository
-pull requests, and branch pushes with an open PR do not duplicate the PR checks.
-They moved off the self-hosted `host:r720-ai` runner in October 2026: that runner
-deploys homelab services and only runs reviewed workflows from homelab repositories'
-`main` branches (homelab HOM-1659).
+Checks cover links/contracts, the fictional Gherkin/checklist examples, AC and size
+budgets, approval/state regressions and private-artifact hygiene. They do not prove
+semantic quality or certify a specific assistant/MCP installation.
