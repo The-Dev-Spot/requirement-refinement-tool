@@ -1,0 +1,56 @@
+name: Clarity checks
+on:
+  push:
+    branches: [main]
+  pull_request:
+permissions:
+  contents: read
+concurrency:
+  group: clarity-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  test:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    container:
+      image: python:${{ matrix.python }}-bookworm
+      options: --cpus 2
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ['3.11', '3.13']
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: >-
+          python -m pip install --require-hashes --only-binary=:all: -r requirements.lock
+      - name: Require selected Python version
+        env:
+          EXPECTED_PYTHON: ${{ matrix.python }}
+        run: |
+          python -c 'import os, sys; assert "%d.%d" % sys.version_info[:2] == os.environ["EXPECTED_PYTHON"]'
+      - name: Require official parser (no silent skip)
+        run: python -c "from gherkin import Parser, Compiler; assert Parser and Compiler"
+      - run: python -m clarity validate-config
+      - run: python -m unittest discover -s tests -v
+      - run: python -m clarity lint examples/checklist-requirement.json
+      - run: python -m clarity benchmark examples/rule-benchmark.json
+      - run: python -m clarity gate examples/complete-report.json
+      - name: Scan tracked source in the checked-out workspace
+        run: >-
+          GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=safe.directory
+          GIT_CONFIG_VALUE_0="$GITHUB_WORKSPACE" python -m clarity check-repo
+      - name: Install pinned build tools
+        run: >-
+          python -m pip install --require-hashes --only-binary=:all: -r requirements-build.lock
+      - name: Build installable wheel
+        run: python -m pip wheel --no-deps --no-build-isolation --wheel-dir dist .
+      - name: Smoke-test installed package outside checkout
+        run: |
+          python -m venv --system-site-packages /tmp/clarity-package-venv
+          /tmp/clarity-package-venv/bin/python -m pip install --no-deps dist/*.whl
+          cd /tmp
+          /tmp/clarity-package-venv/bin/clarity setup --state /tmp/clarity-package-state
+          /tmp/clarity-package-venv/bin/clarity doctor --state /tmp/clarity-package-state

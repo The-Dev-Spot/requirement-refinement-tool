@@ -1,0 +1,144 @@
+{
+  "synthetic": true,
+  "source": {
+    "id": "POLICY1",
+    "title": "Synthetic confirmed booking policy",
+    "text": "Reception staff currently contact support to cancel bookings.\nSelf-service cancellation reduces the need to contact support.\nThis change covers cancellation of confirmed bookings.\nPayment refunds are outside the scope of this change.\nOnly the booking owner may cancel a confirmed booking, and only before its start time. At or after its start time the booking remains confirmed. Requests from anyone other than the owner leave the booking confirmed. Repeating cancellation of an already cancelled booking leaves it cancelled.",
+    "locator": "local:synthetic:booking-policy",
+    "kind": "reference",
+    "authority": "synthetic-owner",
+    "digest": "eccc8d57431b3d2987d2cf7f94b843b94690747a0f5d4ccedf9976104d00de9e"
+  },
+  "draft": {
+    "version": 1,
+    "title": "Owner cancellation of bookings",
+    "statements": [
+      {
+        "id": "BR1",
+        "kind": "problem",
+        "text": "Reception staff currently contact support to cancel bookings.",
+        "citations": [
+          {
+            "source_id": "POLICY1",
+            "source_digest": "eccc8d57431b3d2987d2cf7f94b843b94690747a0f5d4ccedf9976104d00de9e",
+            "quote": "Reception staff currently contact support to cancel bookings."
+          }
+        ]
+      },
+      {
+        "id": "BR2",
+        "kind": "value",
+        "text": "Self-service cancellation reduces the need to contact support.",
+        "citations": [
+          {
+            "source_id": "POLICY1",
+            "source_digest": "eccc8d57431b3d2987d2cf7f94b843b94690747a0f5d4ccedf9976104d00de9e",
+            "quote": "Self-service cancellation reduces the need to contact support."
+          }
+        ]
+      },
+      {
+        "id": "BR3",
+        "kind": "scope",
+        "text": "This change covers cancellation of confirmed bookings.",
+        "citations": [
+          {
+            "source_id": "POLICY1",
+            "source_digest": "eccc8d57431b3d2987d2cf7f94b843b94690747a0f5d4ccedf9976104d00de9e",
+            "quote": "This change covers cancellation of confirmed bookings."
+          }
+        ]
+      },
+      {
+        "id": "BR4",
+        "kind": "exclusion",
+        "text": "Payment refunds are outside the scope of this change.",
+        "citations": [
+          {
+            "source_id": "POLICY1",
+            "source_digest": "eccc8d57431b3d2987d2cf7f94b843b94690747a0f5d4ccedf9976104d00de9e",
+            "quote": "Payment refunds are outside the scope of this change."
+          }
+        ]
+      },
+      {
+        "id": "BR5",
+        "kind": "rule",
+        "text": "Only the booking owner may cancel a confirmed booking, and only before its start time. At or after its start time the booking remains confirmed. Requests from anyone other than the owner leave the booking confirmed. Repeating cancellation of an already cancelled booking leaves it cancelled.",
+        "citations": [
+          {
+            "source_id": "POLICY1",
+            "source_digest": "eccc8d57431b3d2987d2cf7f94b843b94690747a0f5d4ccedf9976104d00de9e",
+            "quote": "Only the booking owner may cancel a confirmed booking, and only before its start time. At or after its start time the booking remains confirmed. Requests from anyone other than the owner leave the booking confirmed. Repeating cancellation of an already cancelled booking leaves it cancelled."
+          }
+        ]
+      }
+    ],
+    "feature": "Feature: Owner cancellation of a booking\n\n  @case_SC1\n  Scenario: Owner cancels before the booking starts\n    Given a confirmed booking owned by Alice starts at 12:00\n    And the current time is 11:59\n    When Alice requests cancellation\n    Then the booking status is cancelled\n\n  @case_SC2\n  Scenario: Another user cannot cancel the booking\n    Given a confirmed booking owned by Alice starts at 12:00\n    And the current time is 11:59\n    When Bob requests cancellation\n    Then the booking status remains confirmed\n\n  @case_SC3\n  Scenario Outline: Cancellation respects the start-time boundary\n    Given a confirmed booking owned by Alice starts at 12:00\n    And the current time is <time>\n    When Alice requests cancellation\n    Then the booking status is <status>\n\n    Examples:\n      | time  | status    |\n      | 11:59 | cancelled |\n      | 12:00 | confirmed |\n      | 12:01 | confirmed |\n\n  @case_SC4\n  Scenario: Repeating cancellation does not change the result\n    Given a cancelled booking is owned by Alice\n    When Alice requests cancellation again\n    Then the booking status remains cancelled\n",
+    "scenarios": [
+      {
+        "id": "SC1",
+        "statement_ids": [
+          "BR5"
+        ],
+        "category": "positive"
+      },
+      {
+        "id": "SC2",
+        "statement_ids": [
+          "BR5"
+        ],
+        "category": "negative"
+      },
+      {
+        "id": "SC3",
+        "statement_ids": [
+          "BR5"
+        ],
+        "category": "boundary"
+      },
+      {
+        "id": "SC4",
+        "statement_ids": [
+          "BR5"
+        ],
+        "category": "alternative"
+      }
+    ],
+    "coverage": [
+      {
+        "statement_id": "BR5",
+        "category": "positive",
+        "scenario_ids": [
+          "SC1"
+        ],
+        "not_applicable_reason": null
+      },
+      {
+        "statement_id": "BR5",
+        "category": "negative",
+        "scenario_ids": [
+          "SC2"
+        ],
+        "not_applicable_reason": null
+      },
+      {
+        "statement_id": "BR5",
+        "category": "boundary",
+        "scenario_ids": [
+          "SC3"
+        ],
+        "not_applicable_reason": null
+      },
+      {
+        "statement_id": "BR5",
+        "category": "alternative",
+        "scenario_ids": [
+          "SC4"
+        ],
+        "not_applicable_reason": null
+      }
+    ],
+    "proposals": []
+  }
+}

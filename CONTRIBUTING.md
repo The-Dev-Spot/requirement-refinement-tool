@@ -1,0 +1,42 @@
+# Contributing
+
+Read [AGENTS.md](AGENTS.md) for the quality and authority contract. Prefer small,
+reviewable changes that improve the final requirement rather than its self-score.
+
+Use Python 3.11+ on a POSIX system. Create a virtual environment, install the
+hash-locked runtime requirements, then `python -m pip install --no-deps -e .`.
+
+```sh
+python -m unittest discover -s tests -v
+python -m clarity validate-config
+python -m clarity lint examples/checklist-requirement.json
+python -m clarity benchmark examples/rule-benchmark.json
+python -m clarity gate examples/complete-report.json
+python -m clarity check-repo
+python -m pip wheel --no-deps .
+```
+
+Stage new source files before the tracked-file scan. Check the resulting wheel
+outside the checkout: setup, doctor and loopback startup must work without the
+repository's documentation paths. Follow the separate browser-test instructions
+for real-browser verification. Use the quality corpus for model/prompt changes;
+fixtures cannot establish semantic quality.
+
+Keep examples fictional and use reserved example domains. Do not commit keys,
+private state, live source data, logs or local MCP client settings. Update relevant
+guides and runtime contracts when behavior changes. Run meaningful regression tests
+for authority, stale context, output validation and recovery boundaries.
+
+No merge, public deployment, remote tracker write or automatic retention deletion
+is part of a local implementation change. Record actual validation and any remaining
+live-model/client qualification in the PR.
+
+## CI runner
+
+Core and browser CI run on GitHub-hosted `ubuntu-latest` runners, inside the same
+disposable Python Bookworm containers. Core checks retain Python 3.11 and 3.13;
+browser checks use Python 3.12. Jobs run for main-branch pushes and same-repository
+pull requests, and branch pushes with an open PR do not duplicate the PR checks.
+They moved off the self-hosted `host:r720-ai` runner in October 2026: that runner
+deploys homelab services and only runs reviewed workflows from homelab repositories'
+`main` branches (homelab HOM-1659).
