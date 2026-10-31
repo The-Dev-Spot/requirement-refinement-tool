@@ -184,8 +184,9 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     const at=args.indexOf('--input');
     if(at < 0 || !args[at+1]) throw new Error('Usage: quality-gate.mjs --input story.json [--output report.json]');
     const input=JSON.parse(fs.readFileSync(args[at+1],'utf8'));
-    const riskPath=path.join(ROOT,'docs/risk-register.md');
-    const catalogPath=path.join(ROOT,'steps/catalog.md');
+    const optValue=name=>{ const i=args.indexOf(name); return i<0?null:(args[i+1]||null); };
+    const riskPath=optValue('--risk-register') || path.join(ROOT,'docs/risk-register.md');
+    const catalogPath=optValue('--step-catalog') || path.join(ROOT,'steps/catalog.md');
     const report=lintStory(input,{
       riskRegister:fs.existsSync(riskPath)?fs.readFileSync(riskPath,'utf8'):undefined,
       stepCatalog:fs.existsSync(catalogPath)?fs.readFileSync(catalogPath,'utf8'):undefined
