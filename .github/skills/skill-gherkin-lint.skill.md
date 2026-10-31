@@ -28,7 +28,7 @@ it passed or establish READY from that result.
    Non-behavioral stories skip Gherkin-specific checks (`L1`, `L4`).
 2. **L1 — Gherkin parses** (behavioral): `Feature`/`Scenario` present, steps in
    `Given -> When -> Then` order, no empty steps. *Hard.*
-3. **L2 — Tag syntax**: each tag is `@<lower-kebab>` or `@risk:<id>` / `@nfr:<id>`;
+3. **L2 — Tag syntax**: each tag is `@<lower-kebab>`, `@risk:<id>` / `@nfr:<id>`, or the reserved optional `@case_<stable-id>` for Forge v2 handoff (e.g. `@case_AC-1`);
    no unknown namespace. *Hard.*
 4. **L3 — Vague terms**: scan every AC against the rubric vague-term list; a hit
    with no adjacent quantifier fails. Report the exact term + location. *Hard.*
