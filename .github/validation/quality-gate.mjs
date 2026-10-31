@@ -150,9 +150,11 @@ export function lintStory(story, options = {}) {
     : result('PASS', `${qLines.length} syntactically valid open-question marker(s)`);
 
   const catalog = options.stepCatalog;
-  check.L8 = !catalog || /Status:\s*EMPTY/i.test(catalog)
-    ? result('NOT_RUN', 'Advisory step catalog is empty or not supplied; does not establish reuse')
-    : result('WARN','Step-catalog similarity requires explicit semantic review (not guessed via substring)');
+  check.L8 = story_type === 'non-behavioral'
+    ? result('NOT_APPLICABLE','No Gherkin step reuse for non-behavioral outcomes')
+    : !catalog || /Status:\s*EMPTY/i.test(catalog)
+      ? result('NOT_RUN','Advisory step catalog empty or missing; no claim of reuse')
+      : result('NOT_RUN','Requires semantic near-duplicate comparison; not executed by this deterministic checker');
   const count = story_type === 'behavioral' ? scenarioCount : criteria.length;
   check.L9 = count < 1 || count > 8 ? result('FAIL', `Acceptance criteria count ${count}; must be 1..8`)
     : result('PASS', `Acceptance criteria count ${count}; target 3–6, hard maximum 8`);
