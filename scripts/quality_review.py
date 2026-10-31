@@ -235,7 +235,7 @@ def summarize(lint, results, policy, backend):
     # Untrusted sourced inputs may be marked "adopted", but this CLI cannot
     # independently authenticate the human decision. Output is a candidate
     # for operator approval, not a license to release.
-    return {"status": "BLOCKED" if reasons else "REVIEWABLE_CANDIDATE",
+    return {"status": "FAIL" if lint.get("status") == "FAIL" else ("BLOCKED" if reasons else "REVIEWABLE_CANDIDATE"),
             "ready_for_handover": False, "publication_authority": False,
             "reasons": reasons or ["All checks report PASS; external policy and operator authorization still required"]}
 
@@ -246,7 +246,9 @@ def review(story, policy, *, lint, provider, model=None, timeout=120, max_budget
     results, receipts = {}, {}
     if lint.get("kind") != "clarity-deterministic-quality-report":
         raise ValueError("Missing real deterministic report")
-    if lint["status"] == "FAIL":
+    if lint["status"] in ("FAIL", "BLOCKED") or not policy.get("adopted") or policy.get("risk_register_status") != "APPROVED":
+        # Never spend model usage to produce a verdict we already know must
+        # be blocked. Operator first supplies the approved local risk policy.
         return {"results": results, "receipts": receipts, "aggregate": summarize(lint, results, policy, provider)}
     for stage in STAGES:
         if fixture_dir:
