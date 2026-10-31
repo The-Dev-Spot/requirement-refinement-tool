@@ -121,7 +121,7 @@ export function lintStory(story, options = {}) {
     const ui = [];
     for(const s of parsed.scenarios) for(const step of s.steps) {
       if (!['Given','When'].includes(step.keyword.trim())) continue;
-      if (/\b(?:click|tap|press|scroll|navigate to|select .+ from .+ dropdown)\b/i.test(step.text))
+      if (/\b(?:click(?:s|ed)?|tap(?:s|ped)?|press(?:es|ed)?|scroll(?:s|ed)?|navigate(?:s|d)? to|select .+ from .+ dropdown)\b/i.test(step.text))
         ui.push({scenario:s.name,step:step.text});
     }
     check.L4 = ui.length ? result('WARN', 'UI choreography rather than declarative behavior',ui)
