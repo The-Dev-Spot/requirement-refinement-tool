@@ -39,6 +39,25 @@ recommends a control but the project has not adopted its exact target,
 mark `# OPEN QUESTION -> PO:` in the draft and keep reference rationale in
 review notes. Never claim a test, certification or legal verdict without evidence.
 
+## Optional Forge handoff preparation (no tracker write authority)
+
+When a developer/operator requests a portable Forge v2 export, generate the
+**approved reviewed requirement** and a typed `criteria.json` sidecar with
+stable `AC-1` identifiers. Behavioral changes retain the original declarative
+Gherkin in an `acceptance.feature` file with exactly one
+`@case_<criterion-id>` tag per approved scenario; nonbehavioral research,
+refactors, migrations and infrastructure changes use **typed measurable criteria
+without a feature file**. Preserve actual text, source/revision, dependencies,
+unresolved decisions and test *intent* without inventing a test PASS.
+This is an **optional post-review data-export preparation**, not another agent
+stage, not a Jira write, and not permission for Forge to start or deploy.
+See `docs/forge-handoff.md` and `scripts/export_forge_handoff.py`.
+
+A missing or uncertain product decision blocks READY under the *existing*
+DoR; do not generate a fake fixed issue just to satisfy a parser. Source IDs and
+case tags must be assigned **before** final approval so they do not alter
+approved bytes during export; do not renumber IDs after they are referenced.
+
 ## Steps
 1. **Assess completeness.** If the story is a stub (minimal description, no ACs),
    this is a **draft-from-context** rewrite, not a polish. Use the gathered context
