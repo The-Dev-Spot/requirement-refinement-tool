@@ -191,8 +191,9 @@ def run_claude(stage, prompt, *, model, timeout, max_budget):
                "--json-schema", canonical(OUTPUT_SCHEMA)]
     if model:
         command.extend(["--model", model])
-    # Deliberately provide prompt only on stdin; never put customer details
-    # in process argv or shell history.
+    command.append("Review the complete requirements packet supplied on stdin, and return the requested JSON.")
+    # Deliberately provide source material only on stdin; never put customer
+    # details in process argv or shell history.
     started = time.monotonic()
     response = subprocess.run(command, input=prompt, text=True, capture_output=True,
                               timeout=timeout, check=False, cwd=tempfile.gettempdir())
