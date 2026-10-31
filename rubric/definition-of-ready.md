@@ -152,6 +152,25 @@ unreadable text to fit.
 
 ---
 
+## Standards applicability and evidence (cross-cutting DoR guidance)
+
+The **optional, public, versioned** [Clarity standards reference](../Reference/standards/README.md) supplies engineering, security, accessibility/UX, API, privacy and operational *challenge questions*. It **does not** establish an eleventh DoR dimension, new L-checks, default regulatory coverage, or an autonomous permission to write Jira/Linear/GitHub. This is a research-backed library, not ratified organization policy.
+
+At **INVESTIGATE**, select relevant topics from the [index](../Reference/standards/catalog.yaml) using verified story characteristics (interface/UI, personal data, auth, backend, CI, operations, native/mobile or AI-agent tool access). For each potentially relevant source record `APPLIES / NOT_APPLICABLE / UNKNOWN`, reason, publisher/version, exact link/section, checked date and trust/authority. **At most 2–5 material questions per story** should reach evaluation; an irrelevant standard is not a finding.
+
+At **EVALUATE**, use applicable evidence within the *existing* dimensions:
+- **D1/D3/D4** — missing build context, error/empty/offline behavior or measurable acceptance checks.
+- **D5** — concrete risk to a negative test/acceptance outcome, when the story exposes that risk.
+- **D6** — version/source authenticity, conflicts, unverified applicability or invented thresholds/constraints.
+- **D8/D9** — dependency and data/API/event contracts, including compatibility or error semantics for actual interface changes.
+- **D10** — relevant non-functional, security, privacy, usability/accessibility and observability characteristics. **DoR's existing Soft/Hard escalation rules still apply.**
+
+A published standard can explain **why a question matters**; it does **not automatically prove** that the project accepted a target (e.g. AA conformance, a timeout, 99.9% availability or an ASVS level). An unresolved material policy choice is `# OPEN QUESTION -> PO:`; never fabricate acceptance criteria or claim a legal certification. Binding project/regulatory policy must be separately verified with its actual owner and jurisdiction. A standards reference is not a substitute for tool-executed audit/CI: mark checks `NOT_RUN` when not performed.
+
+Place the detailed applicability table, source metadata, rationale and test results in **review evidence**, not in the lean handover payload. The story contains only decisions, constraints and criteria needed to implement and verify. If more than eight ACs are essential, split the story. [Examples](../Reference/standards/scenarios.md) show why a server-side bug should **not** inherit unrelated Android/Unity/WCAG requirements.
+
+---
+
 ## Dimensions
 
 Each story is scored per dimension: **PASS / WARN / FAIL**.
