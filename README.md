@@ -22,6 +22,15 @@ Start with the [quickstart](docs/agent/QUICKSTART.md). You can begin with pasted
 text; [connecting Jira and Confluence](docs/setup.md) is a separate setup step.
 No Python application or server installation is required.
 
+## Standards-aware requirement refinement
+
+Clarity includes a [public engineering standards library](Reference/standards/README.md)
+covering requirements quality, secure coding and APIs, privacy, UX/accessibility
+and operational reliability. It selects **only relevant** guidance per story and
+uses the existing [Definition of Ready](rubric/definition-of-ready.md) D1–D10;
+it does not force every standard onto every ticket or certify code quality.
+Published sources and versions live in [the catalog](Reference/standards/catalog.yaml).
+
 ## What you get
 
 - A short requirement with the goal, scope, and clear acceptance criteria.
