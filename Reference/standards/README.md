@@ -24,6 +24,7 @@ The source documents are **linked**, not copied. Open the official edition and s
 
 | Topic | Read when | Applies to |
 |---|---|---|
+| [NASA requirement-writing checklist](nasa-requirements.md) | Any requirement, especially high-risk/complex | NASA Appendix C clarity, completeness, consistency, traceability, feasibility, verifiability |
 | [Requirements & test quality](requirements.md) | Any story | Cold read, provenance, quality gates and regression acceptance |
 | [Engineering, API & data](engineering.md) | Code/API/DB/event/CI change | Contracts, migration, idempotency, compatibility and safe builds |
 | [Security, privacy & AI safety](security.md) | Trust boundary, personal data, APIs, infrastructure, agents | Risk-driven security challenges and least privilege |
