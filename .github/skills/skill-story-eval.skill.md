@@ -50,9 +50,12 @@ identity/shape but not semantic correctness, code or test execution.
 Refer to `docs/forge-handoff.md` and retain project-specific approval policy.
 
 ## Steps
-1. **Run the deterministic layer first** (`skill-gherkin-lint`). If it reports
-   `hard_fail`, set `GATE = FAIL`, record which check failed, and **stop** — do
-   not spend semantic effort (rubric "Overall gate", step 1).
+1. **Run the deterministic layer first** (`skill-gherkin-lint`, backed by
+   `.github/validation/quality-gate.mjs` for JSON story input). Bind the output
+   source SHA to the exact reviewed revision. A hard FAIL stops model scoring.
+   A required NOT_RUN makes verification BLOCKED. Mechanical PASS **never**
+   establishes D1–D10 or independent quality review; consult
+   `docs/quality-gate-finalization.md` before any READY claim.
 2. **Score each dimension** `D1..D10` as PASS/WARN/FAIL using the rubric's own
    PASS/WARN/FAIL definitions as the bar (do not invent your own). For each, give
    a one-line rationale and **evidence** — quote the story text; for sourced

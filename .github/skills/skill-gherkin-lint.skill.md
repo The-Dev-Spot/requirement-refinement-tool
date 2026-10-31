@@ -15,13 +15,31 @@ Deterministic pre-flight for a story. Runs the rubric's machine-checkable checks
 - The `Deterministic checks` section of `docs/agent/runs/{story_id}/{story_id}-eval-report.md`
 - `docs/agent/runs/{story_id}/{story_id}-decision-log.md` (append: only if a judgement call was made)
 
-## Execution availability
-This is an instruction contract, not a bundled full lint implementation. Use a
-verified parser/checker for actual runtime results. The optional maintainer
-validator in `.github/validation/` checks repository fixtures and contracts only.
-It does not score arbitrary stories or implement all L1–L10 checks. If a required
-check is unavailable, record `NOT_RUN` and the missing capability; do not claim
-it passed or establish READY from that result.
+## Executable preflight (read-only; never establishes READY)
+
+Clarity includes `.github/validation/quality-gate.mjs`, an executable JSON
+L1–L10 checker using the **repository-pinned official Cucumber parser**.
+Install trusted dependencies with `npm ci --ignore-scripts --prefix
+.github/validation`, then run:
+
+```sh
+node .github/validation/quality-gate.mjs --input /private/story.json --output /private/lint-report.json
+```
+
+The JSON input contains `title`, `story_type`, `payload`, and either
+behavioral `feature` or nonbehavioral `criteria`; optional `review_notes`,
+`target_format` and `converted_payload`. The report binds a SHA-256 hash,
+L1–L10 PASS/WARN/FAIL/NOT_RUN/NOT_APPLICABLE and any required missing checks.
+A `jira-wiki` target needs the *actual converted text*, otherwise L10 is
+NOT_RUN. An empty step catalog makes the **advisory** L8 NOT_RUN.
+
+**Important:** the linter only checks mechanics. L3 is a vocabulary heuristic,
+L5 validates known risk tags but not risk discovery, L6 checks source formatting
+but not truth, and L8 requires semantic similarity review. The linter always
+returns `ready_for_handover:false`. A mechanical PASS is **not** an overall
+D1–D10 or independent quality-gate PASS. If an essential check is unavailable,
+record `NOT_RUN` and BLOCKED; never silently mark the story READY.
+See `docs/quality-gate-finalization.md`. 
 
 ## Steps
 1. **Classify** the story as behavioral or non-behavioral (rubric "Story types").

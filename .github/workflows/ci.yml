@@ -18,6 +18,8 @@ jobs:
         run: npm ci --ignore-scripts --prefix .github/validation
       - name: Validate toolkit and fictional examples
         run: node .github/validation/check-toolkit.mjs
+      - name: Test deterministic L1-L10 preflight and missing-evidence safety
+        run: node --test .github/validation/quality-gate.test.mjs
 
   handoff-export:
     runs-on: ubuntu-latest

@@ -39,7 +39,15 @@ happens after the verdict depends on the run mode:
 - `skill-decision-index` (record the gate outcome)
 
 ## Responsibilities
-1. Re-run `skill-story-eval` on the final story and confirm the gate.
+1. Re-run `skill-story-eval` on the final story **with executable
+   L1–L10 evidence bound to the candidate's exact source hash**. Do not accept
+   a claimed PASS from an unexecuted skill prompt; missing required checks
+   are BLOCKED. Read `docs/quality-gate-finalization.md` before declaring
+   a candidate READY.
+   **Independent execution has not been implemented in the toolkit:** this
+   prompt profile by itself cannot prove a separately authenticated reviewer.
+   The operator must verify distinct actual invocations/receipts and source
+   binding or record NOT_VERIFIED; do not self-attest independence.
 2. Apply the mandatory handover-readiness matrix below.
 3. Produce an explicit verdict with evidence.
 4. **Review mode:** draft the `ai-reviewed` comment via `skill-jira-io`.
