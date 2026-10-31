@@ -5,6 +5,15 @@ catalog_version: "0.1.0"
 reviewed_on: "2026-10-31"
 authority: advisory
 standards:
+  - id: NASA-APPENDIX-C
+    title: How to Write a Good Requirement — Checklist
+    publisher: NASA
+    edition: "NASA/SP-2016-6105 Rev 2, Appendix C"
+    source_url: "https://www.nasa.gov/reference/appendix-c-how-to-write-a-good-requirement/"
+    kind: requirements-guidance
+    scopes: [requirements]
+    triggers: [all]
+    note: "Adapt checklist to current story; do not require aerospace shall format for agile ACs."
   - id: REQ-29148
     title: Requirements engineering
     publisher: ISO/IEC/IEEE
