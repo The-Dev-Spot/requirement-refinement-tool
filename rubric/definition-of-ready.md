@@ -371,9 +371,14 @@ review evidence.
 
 ## Deterministic checks (linter layer)
 
-These run **before** any model. They are greppable and unambiguous, so they can
-**FAIL a story on their own** (a hard-check failure short-circuits scoring). See
-`.github/skills/skill-story-eval.skill.md` for how the two layers combine.
+These are intended to run **before** any model. A local JSON preflight is now
+provided by `.github/validation/quality-gate.mjs` (see
+`docs/quality-gate-finalization.md`). The pinned Cucumber parser enforces L1;
+L3 is heuristic, L5 only checks explicit risk IDs, L6 checks citation *syntax*,
+and L8 step similarity still requires review (NOT_RUN if not executed).
+**A checker result by itself never establishes D1–D10 PASS or overall READY.**
+Required NOT_RUN checks become BLOCKED, not fabricated PASS. A hard failure
+short-circuits semantic scoring. See `.github/skills/skill-story-eval.skill.md`.
 
 | id | Check | Fails when |
 |----|-------|-----------|
