@@ -43,6 +43,15 @@ completion checklists. Clarity targets 3–6 acceptance criteria, with a maximum
 8. It keeps the requirement concise without dropping details needed to build and
 test it. See the [fictional examples](examples/lean-requirement.md).
 
+## Optional Forge handoff
+
+Reviewed requirements can be exported as typed, exact-byte portable handoffs for
+[Forge](https://github.com/The-Dev-Spot/forge). The [handoff guide](docs/forge-handoff.md)
+explains when to use Gherkin (behavioral examples) versus measurable checklist
+criteria (infrastructure, refactors and research), stable IDs and the
+deterministic local exporter. This is **data transfer**, not automatic dispatch,
+test verification, Jira write approval or permission to change production.
+
 ## Use Clarity your way
 
 Review an existing story, develop a new requirement through conversation, or

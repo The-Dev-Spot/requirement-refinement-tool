@@ -417,7 +417,7 @@ These run **before** any model. They are greppable and unambiguous, so they can
 | id | Check | Fails when |
 |----|-------|-----------|
 | L1 | **Gherkin parses** | A behavioral story's `.feature`/AC block is not valid Gherkin (missing `Feature`/`Scenario`, steps out of `Given->When->Then` order, empty steps). |
-| L2 | **Tag syntax valid** | A tag is malformed: not `@<lower-kebab>` or `@risk:<id>` / `@nfr:<id>`; unknown tag namespace. |
+| L2 | **Tag syntax valid** | A tag is malformed: not `@<lower-kebab>`, `@risk:<id>`, `@nfr:<id>`, or the optional Forge-handoff `@case_<stable-id>`; unknown tag namespace. |
 | L3 | **No vague terms** | An AC contains a term from the vague-term list below without an adjacent quantifier. |
 | L4 | **Declarative steps** | A `Given`/`When` step contains an imperative UI verb (`click`, `tap`, `press`, `navigate to`, `scroll`, `select ... from ... dropdown`). (WARN by default; FAIL if pervasive.) |
 | L5 | **`@risk` resolves** | A `@risk:<id>` does not match an entry id in `docs/risk-register.md`. |
@@ -452,6 +452,7 @@ support X (without stating the behavior)
   `docs/risk-register.md` (id pattern `RISK-[0-9]+`).
 - **NFR tag:** `@nfr:<id>` (e.g. `@nfr:audit`, `@nfr:gdpr`) — optional,
   namespaced.
+- **Portable handoff case tag:** `@case_<stable-id>` (e.g. `@case_AC-1`), optional for behavioral stories exported to Forge v2. One tag per criterion/scenario; IDs are preserved into tests and independent review. The tag is **not an executed test** and is unnecessary for nonbehavioral checklist stories. See [typed handoff](../docs/forge-handoff.md).
 - **Open question:** exactly `# OPEN QUESTION -> PO: <question>` on its own line.
   `PO` = Product Owner (the internal owner who resolves it before handover).
 - **Provenance citation** (one line, directly under the claim it supports):

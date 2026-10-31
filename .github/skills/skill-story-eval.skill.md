@@ -39,6 +39,16 @@ create L11/D11 or automatically FAIL for irrelevant guides. If a cited edition
 is changed/stale/unreachable, flag uncertainty; no fabricated compliance
 claim. A source lookup is not a test run. Record real test receipts or NOT_RUN.
 
+## Optional Forge v2 consumer compatibility
+
+When a Forge export has actually been requested, additionally inspect whether
+the chosen behavioral Gherkin examples have stable, unambiguous `@case_<id>`
+identity; when a nonbehavioral work item is intended, use the measurable outcome
+checklist instead. This is evidence for **existing D3/D4/D6/D9**, not a new
+universal check or a new DoR dimension. The exporter schema validates
+identity/shape but not semantic correctness, code or test execution.
+Refer to `docs/forge-handoff.md` and retain project-specific approval policy.
+
 ## Steps
 1. **Run the deterministic layer first** (`skill-gherkin-lint`). If it reports
    `hard_fail`, set `GATE = FAIL`, record which check failed, and **stop** — do
