@@ -171,6 +171,45 @@ Place the detailed applicability table, source metadata, rationale and test resu
 
 ---
 
+## Standards-informed review (contextual, not a new DoR dimension)
+
+The public [Clarity standards index](../Reference/standards/README.md) and
+[versioned source catalog](../Reference/standards/catalog.yaml) are **research
+references** to help the investigator/evaluator discover missing requirements.
+[NASA Appendix C](../Reference/standards/nasa-requirements.md) is a particularly
+useful baseline for clarity, completeness, consistency, traceability, correctness
+and verifiability; additional guides cover relevant engineering, API, security,
+privacy, accessibility/UX and operational concerns.
+
+**Applicability first.** Identify story type and actual affected technology,
+environment, interface, data sensitivity and user journey before selecting a
+guide. In review evidence, mark relevant standards `APPLIES`,
+`NOT_APPLICABLE` or `UNKNOWN` with reasons; ask at most 2–5 *material*
+challenge questions. A server-only defect is **not** expected to satisfy Unity
+playmode or native Android UI criteria. A UI-only story is not expected to define
+a backend SLO without a backend impact.
+
+**Existing gate only.** Standards findings are evaluated through **D1–D10**
+and **L1–L10** exactly as defined here: ambiguity D1/D4, unsupported facts
+D6, risk/negative outcomes D5, dependencies D8, interface/data D9, and
+security/UX/operability D10. No `D11`, new linter gate or compliance score
+is created. Keep relevant facts and observable outcomes in the **lean story**;
+put versioned source citations, applicability decisions and rationale in
+**review evidence**, no mandatory Confluence log-book needed to consult this
+public pack.
+
+**What versus how.** Challenge gratuitous implementation prescriptions unless
+the chosen technology is an explicitly approved design constraint. NASA's
+`shall/will/should` terminology is intended for formal system requirements;
+Clarity keeps its existing behavioral Gherkin/non-behavioral checklist contract.
+Do not synthesize numeric thresholds, legal obligations, security guarantees
+or design rules that the owner has not approved. If a required source or
+verification tool is unavailable, record `UNKNOWN` / `NOT_RUN`, never PASS.
+**Only an authorized owner or policy determines whether external guidance is
+binding.** A standards citation does not replace tests or human approval.
+
+---
+
 ## Dimensions
 
 Each story is scored per dimension: **PASS / WARN / FAIL**.
