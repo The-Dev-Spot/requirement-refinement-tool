@@ -34,8 +34,13 @@ Unavailable checks are `NOT_RUN`; include checker identity and evidence.
 | D9 Data & interface contracts | {...} | |
 | D10 Non-functional & compliance | {...} | |
 
-## GATE: {PASS | WARN | FAIL}
-Reasons: {the specific checks/dimensions that set the gate}
+## GATE: {PASS | WARN | FAIL | BLOCKED / NOT_VERIFIED}
+Reasons: {the specific executed checks/dimensions that set the gate}
+
+Checker version/source hash: {exact validator + sha256 or NOT_RUN}
+Project DoR/risk policy adoption and revision: {source or NOT_VERIFIED}
+Independent reviewer run evidence: {separate authenticated invocation reference or NOT_VERIFIED}
+NOTE: Mechanical PASS does not imply READY or executed regression tests.
 
 ## Open questions raised
 - # OPEN QUESTION -> PO: {...}
