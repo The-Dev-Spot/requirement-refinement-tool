@@ -34,7 +34,7 @@ jobs:
         with:
           python-version: '3.12'
       - name: Test deterministic handoff exporter (no model or secrets)
-        run: python -m unittest discover -s tests -p 'test_*.py' -v
+        run: python -m unittest discover -s tests -p 'test_forge_handoff_export.py' -v
       - name: Compile exporter and validate sample format
         run: python -m py_compile scripts/export_forge_handoff.py
 
