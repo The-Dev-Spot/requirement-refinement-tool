@@ -37,6 +37,26 @@ Instruction files describe the workflow; they do not supply a complete executabl
 lint engine or grant tool access. Record actual tool results. A check that could
 not be executed is `NOT_RUN`, never a fabricated PASS, and cannot establish READY.
 
+## Public engineering standards (advisory context, not an extra gate)
+
+Read [Reference/standards/README.md](Reference/standards/README.md) and its
+[versioned source index](Reference/standards/catalog.yaml) when investigating
+software stories. Select relevant topics from actual product surfaces, trust
+boundaries and evidence. Do **not** force every security, UX, accessibility,
+mobile or release standard onto every story. For each candidate source note
+APPLIES / NOT_APPLICABLE / UNKNOWN, reason, source version/link and open
+questions in private review evidence. Use the **existing DoR dimensions**
+(D1–D10), especially D5, D6, D9 and D10; DoR remains the only readiness contract.
+
+External standards are **research references**, not a newly adopted product
+requirement, legal opinion or permission to operate tools. Ask before choosing
+unsupported compliance levels, latency targets, retention values or UX policies.
+Nothing in Reference/ authorizes Jira/Linear/GitHub writes; follow the actual
+configured approval/write policy. Reports of source reading do not establish
+executable lint, secure code or WCAG conformance; mark unavailable checks
+NOT_RUN. Prefer the short buildable story and keep citations, applicability and
+judgment in evidence.
+
 ## Design Principles
 
 1. **Cold-read first.** Stories go to **the receiving development teams**
