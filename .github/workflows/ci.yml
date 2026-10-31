@@ -18,3 +18,20 @@ jobs:
         run: npm ci --ignore-scripts --prefix .github/validation
       - name: Validate toolkit and fictional examples
         run: node .github/validation/check-toolkit.mjs
+
+  handoff-export:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: '3.12'
+      - name: Test deterministic handoff exporter (no model or secrets)
+        run: python -m unittest discover -s tests -p 'test_*.py' -v
+      - name: Compile exporter and validate sample format
+        run: python -m py_compile scripts/export_forge_handoff.py
