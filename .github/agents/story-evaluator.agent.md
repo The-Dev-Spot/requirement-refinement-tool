@@ -26,6 +26,7 @@ first, then semantic scoring.
   as this story's requirements; use it to recognise when a gap is already answered
   elsewhere, or when a sibling story set a precedent this story should match.
 - `docs/agent/learnings.md`
+- `Reference/standards/README.md`, `Reference/standards/catalog.yaml` and selected topic guides (especially `nasa-requirements.md` for ambiguous requirements). Select by project/platform/risk, record relevance and versioned source in review evidence. Do not force UI standards on backend stories or invent binding policy.
 
 ## Writes
 - `docs/agent/runs/{story_id}/{story_id}-eval-report.md` (scorecard + gate; replace-in-place)
