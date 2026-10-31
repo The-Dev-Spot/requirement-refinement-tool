@@ -137,23 +137,6 @@ judgment in evidence.
   `${ENV_VAR}` from shell profile); setup in `docs/mcp.md`. MCP is the preferred
   read/comment path.
 
-### Public standards reference (no change to approval or readiness gates)
-
-When investigating or evaluating a story, check the [versioned public
-standards pack](Reference/standards/README.md) for **relevant** requirements,
-engineering/API, security/privacy, user experience/accessibility and reliability
-questions. Start with [NASA Appendix C](Reference/standards/nasa-requirements.md)
-for ambiguous or high-risk requirements. Record in **private review evidence**
-the source/version and APPLIES, NOT_APPLICABLE or UNKNOWN decision; reference
-the existing DoR D1–D10 and ask only the important missing questions.
-
-**Do not:** blindly apply all standards, introduce a new global gate, convert
-NASA's `shall` wording into mandatory Gherkin, invent constraints or claim
-compliance/test PASS without execution. The standards pack grants **no tools,
-tracker writes, permission bypasses or approval**, and is not a Confluence
-logbook replacement. Keep project-specific policies separate under the
-operator's private, scoped configuration.
-
 ### Stage Order
 1. `story-orchestrator` (entrypoint; reads story + context, plans the run;
    accepts `mode: review | apply`, default `review`)
