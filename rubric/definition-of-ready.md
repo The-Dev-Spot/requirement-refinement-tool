@@ -452,6 +452,7 @@ support X (without stating the behavior)
   `docs/risk-register.md` (id pattern `RISK-[0-9]+`).
 - **NFR tag:** `@nfr:<id>` (e.g. `@nfr:audit`, `@nfr:gdpr`) — optional,
   namespaced.
+- **Portable handoff case tag:** `@case_<stable-id>` (e.g. `@case_AC-1`), optional for behavioral stories exported to Forge v2. One tag per criterion/scenario; IDs are preserved into tests and independent review. The tag is **not an executed test** and is unnecessary for nonbehavioral checklist stories. See [typed handoff](../docs/forge-handoff.md).
 - **Open question:** exactly `# OPEN QUESTION -> PO: <question>` on its own line.
   `PO` = Product Owner (the internal owner who resolves it before handover).
 - **Provenance citation** (one line, directly under the claim it supports):
