@@ -11,6 +11,7 @@ thing without needing to ask?
 ## Reads
 - `rubric/definition-of-ready.md` (dimensions `D1..D10`, gate logic — the contract)
 - `docs/risk-register.md`, `steps/catalog.md`
+- `Reference/standards/README.md` and relevant linked topic guide(s), including `nasa-requirements.md` for clarity, consistency and verifiability; consult source versions in `catalog.yaml`. Record APPLIES / NOT_APPLICABLE / UNKNOWN and reason. Advisory standards **do not add a gate, grant approval, or become unconfirmed requirements**.
 - `docs/agent/runs/{story_id}/{story_id}-story-input.md` (the story + gathered context).
   **Important:** the story input includes both the Jira description AND the
   Acceptance Criteria Checklist (field ID from `.github/project-config.yaml`,
