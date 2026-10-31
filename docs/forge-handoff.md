@@ -71,3 +71,13 @@ For automated Forge City use, attach trusted operator-approved WorkOrder identit
 2. Real cross-repository exported fixture → Forge inspect → verify → delivery-plan mapping; compare immutable criterion IDs.
 3. Three-story live study (backend bug, infra reliability, refactor) and independent actual test evidence.
 4. Only after these, connect accepted tracker issues into unattended Clarity and Forge worker pools.
+
+## Integration quality gate
+
+Before promoting this local contract to an unattended service, run an **actual
+paired-repository fixture**: Clarity exporter → Forge importer → accepted input
+verification → coverage of every approved criterion in a locked delivery plan.
+Report exact package SHA and criterion ID mapping. A standalone exporter test
+or a Gherkin parse success alone does not establish test execution or requirement
+correctness. Maintain one owner of the contract schema and regression fixtures
+in both repositories when its version changes.
