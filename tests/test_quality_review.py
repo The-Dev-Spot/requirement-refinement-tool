@@ -100,6 +100,23 @@ class ReviewContractTests(unittest.TestCase):
             x=review(story(),policy(),lint=lint("FAIL"),provider="claude")
         self.assertEqual(x["aggregate"]["status"],"FAIL")
 
+    def test_explicit_draft_policy_pilot_runs_synthetic_stages_but_remains_blocked(self):
+        draft=policy()
+        draft["adopted"]=False
+        draft["risk_register_status"]="DRAFT"
+        draft.pop("risk_register_path")
+        with tempfile.TemporaryDirectory() as tmp:
+            for stage in ("investigator","evaluator","challenger"):
+                (Path(tmp)/(stage+".json")).write_text(json.dumps(result(stage)))
+            without=review(story(),draft,lint=lint(),provider="fixtures",fixture_dir=tmp)
+            self.assertEqual(without["results"],{})
+            with_pilot=review(story(),draft,lint=lint(),provider="fixtures",
+                              fixture_dir=tmp,pilot_draft_policy=True)
+            self.assertEqual(set(with_pilot["results"]),{"investigator","evaluator","challenger"})
+            self.assertEqual(with_pilot["aggregate"]["status"],"BLOCKED")
+            self.assertFalse(with_pilot["aggregate"]["ready_for_handover"])
+            self.assertFalse(with_pilot["aggregate"]["publication_authority"])
+
     def test_invalid_evaluator_dimensions_refused(self):
         x=result("evaluator");x["dimensions"].pop()
         with self.assertRaises(ValueError):check_stage("evaluator",x)

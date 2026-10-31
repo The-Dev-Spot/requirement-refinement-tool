@@ -241,14 +241,18 @@ def summarize(lint, results, policy, backend):
 
 
 def review(story, policy, *, lint, provider, model=None, timeout=120, max_budget=1.0,
-           fixture_dir=None):
+           fixture_dir=None, pilot_draft_policy=False):
     verify_inputs(story, policy)
     results, receipts = {}, {}
     if lint.get("kind") != "clarity-deterministic-quality-report":
         raise ValueError("Missing real deterministic report")
-    if lint["status"] in ("FAIL", "BLOCKED") or not policy.get("adopted") or policy.get("risk_register_status") != "APPROVED":
-        # Never spend model usage to produce a verdict we already know must
-        # be blocked. Operator first supplies the approved local risk policy.
+    if lint["status"] in ("FAIL", "BLOCKED") or (
+        (not policy.get("adopted") or policy.get("risk_register_status") != "APPROVED")
+        and not pilot_draft_policy
+    ):
+        # Default: never spend model usage on an unapproved policy. Explicit
+        # pilot mode permits research but aggregation remains BLOCKED, and
+        # nothing in the runner creates publication or execution authority.
         return {"results": results, "receipts": receipts, "aggregate": summarize(lint, results, policy, provider)}
     for stage in STAGES:
         if fixture_dir:
@@ -270,6 +274,8 @@ def main():
     p.add_argument("--output", type=Path, required=True)
     p.add_argument("--provider", choices=["claude", "fixtures"], default="claude")
     p.add_argument("--fixture-dir", type=Path)
+    p.add_argument("--pilot-with-draft-policy", action="store_true",
+                   help="Explicit local benchmark only: permit model calls with draft policy; never READY")
     p.add_argument("--model")
     p.add_argument("--timeout", type=int, default=120)
     p.add_argument("--max-budget-usd", type=float, default=1.0)
@@ -295,9 +301,11 @@ def main():
                   "input_file_sha256": digest(args.input.read_bytes()),
                   "policy_file_sha256": digest(args.policy.read_bytes()),
                   "deterministic": lint,
+                  "pilot_with_draft_policy": args.pilot_with_draft_policy,
                   "run": review(story, policy, lint=lint, provider=args.provider,
                                 model=args.model, timeout=args.timeout,
-                                max_budget=args.max_budget_usd, fixture_dir=args.fixture_dir)}
+                                max_budget=args.max_budget_usd, fixture_dir=args.fixture_dir,
+                                pilot_draft_policy=args.pilot_with_draft_policy)}
         args.output.parent.mkdir(parents=True, exist_ok=True)
         with args.output.open("x", encoding="utf-8") as handle:
             os.chmod(args.output, 0o600)
