@@ -55,6 +55,30 @@ python3 scripts/quality_review.py \
 
 For **synthetic offline tests only**, use `--provider fixtures --fixture-dir /private/fixtures`, with separate `investigator.json`, `evaluator.json`, `challenger.json` files. Synthetic fixture reports remain **BLOCKED** regardless of simulated PASS results.
 
+## Explicit draft-policy benchmark
+
+For first M0 research, a project risk overlay may still be **DRAFT** and the
+generic DoR may not yet be ratified. The default runner prevents model
+invocations in that state. To **deliberately test** model finding quality
+without granting readiness, pass:
+
+```sh
+python3 scripts/quality_review.py \
+  --input /private/forge-city/HOM-1972.snapshot.json \
+  --policy /private/forge-city/project-policy-draft.json \
+  --output /private/forge-city/HOM-1972.draft-pilot.json \
+  --provider claude --model sonnet --pilot-with-draft-policy
+```
+
+Use `adopted: false`, `risk_register_status: DRAFT`, and the source-
+versioned proposed decisions (never counterfeit an APPROVED policy). This
+permits separate *read-only* model calls for testing their critical reasoning
+but the final report stays **BLOCKED** and cannot authorize writes or Forge
+work. All program safety settings and usage controls still apply. The
+`pilot_with_draft_policy` field records that the override was explicitly
+requested; CI only validates synthetic fixtures. **Never use this flag as a
+production readiness bypass.**
+
 The report contains input/policy hashes, actual preflight result, invocation IDs and model-provided output/metadata, plus a machine-derived aggregate. It does **not** attest that input policy was approved by a cryptographically verified owner or that model findings were factually correct. These require a trusted supervisor and human adoption before advancing to automatic Forge City dispatch.
 
 ## First M0 pilot
