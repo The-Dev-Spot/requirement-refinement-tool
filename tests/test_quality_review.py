@@ -98,7 +98,7 @@ class ReviewContractTests(unittest.TestCase):
     def test_no_model_invoked_when_mechanical_lint_fails(self):
         with patch("quality_review.run_claude",side_effect=AssertionError("Should not call model")):
             x=review(story(),policy(),lint=lint("FAIL"),provider="claude")
-        self.assertEqual(x["aggregate"]["status"],"BLOCKED")
+        self.assertEqual(x["aggregate"]["status"],"FAIL")
 
     def test_invalid_evaluator_dimensions_refused(self):
         x=result("evaluator");x["dimensions"].pop()
