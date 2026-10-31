@@ -477,8 +477,13 @@ support X (without stating the behavior)
      ("ready to review internally, not yet ready to hand over").
    - Else -> **overall PASS** ("ready to hand over").
 
-Only an **overall PASS** with **zero unresolved open questions** clears the
-one-way handover bar.
+Only an **overall PASS** with **zero unresolved open questions**, a bound
+real deterministic report and **evidence of independent semantic verification**
+clears the one-way handover bar. A required check, risk-policy decision or
+independent invocation that is unavailable yields `BLOCKED / NOT_VERIFIED`
+(execution status, **not** a new DoR score or D11). Mechanical-only PASS
+**never** equals READY. The operator's tracker write policy remains separate
+from requirement readiness.
 
 ---
 
