@@ -1,0 +1,145 @@
+# Public, version-aware RESEARCH INDEX. Not a policy, compliance certificate, or executable instruction.
+# Human maintainers must verify source editions and applicability for each high-impact story.
+schema_version: 1
+catalog_version: "0.1.0"
+reviewed_on: "2026-10-31"
+authority: advisory
+standards:
+  - id: NASA-APPENDIX-C
+    title: How to Write a Good Requirement — Checklist
+    publisher: NASA
+    edition: "NASA/SP-2016-6105 Rev 2, Appendix C"
+    source_url: "https://www.nasa.gov/reference/appendix-c-how-to-write-a-good-requirement/"
+    kind: requirements-guidance
+    scopes: [requirements]
+    triggers: [all]
+    note: "Adapt checklist to current story; do not require aerospace shall format for agile ACs."
+  - id: REQ-29148
+    title: Requirements engineering
+    publisher: ISO/IEC/IEEE
+    edition: "29148:2018"
+    source_url: "https://www.iso.org/standard/72089.html"
+    kind: standard
+    scopes: [requirements]
+    triggers: [all]
+    note: "Public abstract only; full text requires licensed access."
+  - id: NIST-SSDF
+    title: Secure Software Development Framework
+    publisher: NIST
+    edition: "SP 800-218 v1.1"
+    source_url: "https://csrc.nist.gov/projects/ssdf"
+    kind: framework
+    scopes: [engineering, security, delivery]
+    triggers: [code, security, ci, production]
+  - id: OWASP-ASVS
+    title: Application Security Verification Standard
+    publisher: OWASP
+    edition: "5.0.0 stable"
+    source_url: "https://asvs.owasp.org/"
+    kind: verification-standard
+    scopes: [security, engineering]
+    triggers: [web, api, authentication, authorization]
+  - id: OWASP-API
+    title: API Security Top 10
+    publisher: OWASP
+    edition: "2023"
+    source_url: "https://owasp.org/API-Security/editions/2023/en/0x11-t10/"
+    kind: risk-guidance
+    scopes: [security, engineering]
+    triggers: [api, webhook, integration]
+  - id: OWASP-MASVS
+    title: Mobile Application Security Verification Standard
+    publisher: OWASP
+    edition: "MASVS (consult current stable at review time)"
+    source_url: "https://mas.owasp.org/MASVS/"
+    kind: verification-standard
+    scopes: [security]
+    triggers: [native_mobile, sensitive_mobile_data]
+  - id: OWASP-LLM
+    title: LLM Top 10
+    publisher: OWASP
+    edition: "2025"
+    source_url: "https://genai.owasp.org/llm-top-10/"
+    kind: risk-guidance
+    scopes: [security]
+    triggers: [ai_agents, untrusted_model_input, tool_use]
+  - id: WCAG-22
+    title: Web Content Accessibility Guidelines
+    publisher: W3C
+    edition: "2.2 Recommendation"
+    source_url: "https://www.w3.org/TR/WCAG22/"
+    kind: standard
+    scopes: [ux]
+    triggers: [web_ui, accessible_interaction]
+  - id: ANDROID-A11Y
+    title: Android accessible apps
+    publisher: Google Android Developers
+    edition: "Living guidance"
+    source_url: "https://developer.android.com/guide/topics/ui/accessibility/"
+    kind: platform-guidance
+    scopes: [ux]
+    triggers: [android_ui]
+  - id: APPLE-HIG
+    title: Human Interface Guidelines
+    publisher: Apple
+    edition: "Living guidance"
+    source_url: "https://developer.apple.com/design/human-interface-guidelines/design-principles/"
+    kind: platform-guidance
+    scopes: [ux]
+    triggers: [apple_ui]
+  - id: NNG-HEURISTICS
+    title: Ten usability heuristics
+    publisher: Nielsen Norman Group
+    edition: "Last reviewed 2024-01"
+    source_url: "https://www.nngroup.com/articles/ten-usability-heuristics/"
+    kind: heuristic
+    scopes: [ux]
+    triggers: [any_ui]
+  - id: OPENAPI
+    title: OpenAPI Specification
+    publisher: OpenAPI Initiative
+    edition: "3.2.1"
+    source_url: "https://spec.openapis.org/oas/v3.2.1.html"
+    kind: specification
+    scopes: [engineering]
+    triggers: [http_api_contract]
+  - id: RFC-9457
+    title: Problem Details for HTTP APIs
+    publisher: IETF
+    edition: "RFC 9457"
+    source_url: "https://www.rfc-editor.org/rfc/rfc9457.html"
+    kind: specification
+    scopes: [engineering]
+    triggers: [http_api_error]
+  - id: GH-ACTIONS
+    title: Security for GitHub Actions
+    publisher: GitHub
+    edition: "Living guidance"
+    source_url: "https://docs.github.com/en/actions/how-tos/secure-your-work"
+    kind: platform-guidance
+    scopes: [security, delivery]
+    triggers: [ci, deployment, pull_request]
+  - id: OTEL-SEMCONV
+    title: Semantic Conventions
+    publisher: OpenTelemetry
+    edition: "1.44.0 as observed 2026-10-31; verify before adoption"
+    source_url: "https://opentelemetry.io/docs/specs/semconv/"
+    kind: specification
+    scopes: [operations]
+    triggers: [observability, telemetry, services]
+  - id: GOOGLE-SLO
+    title: Implementing Service Level Objectives
+    publisher: Google SRE
+    edition: "SRE Workbook"
+    source_url: "https://sre.google/workbook/implementing-slos/"
+    kind: practice-guidance
+    scopes: [operations]
+    triggers: [production, performance, reliability]
+  - id: GDPR-BY-DESIGN
+    title: Data protection by design and default
+    publisher: European Commission
+    edition: "GDPR Article 25 explanation"
+    source_url: "https://commission.europa.eu/law/law-topic/data-protection/information-business-and-organisations/obligations_en"
+    kind: regulatory-guidance
+    scopes: [security, privacy]
+    triggers: [personal_data, eu_data_processing]

@@ -49,7 +49,20 @@ for (const p of ['run-status','learnings','decision-index','runs-pruned']) {
   check(!files.includes(`docs/agent/${p}.md`), `Private ${p} register must not ship`);
 }
 check(!files.some(p => p.startsWith('docs/agent/runs/') && !p.endsWith('.gitkeep')), 'No run artifacts may ship');
-check(!files.some(p => p.startsWith('Reference/') && p !== 'Reference/README.md'), 'No project reference corpus may ship');
+// Only public, generic, reviewable standards may be committed under Reference/.
+const allowedPublicReference = p => p === 'Reference/README.md' ||
+  (p.startsWith('Reference/standards/') &&
+   (p.endsWith('.md') || p === 'Reference/standards/catalog.yaml'));
+check(files.filter(p => p.startsWith('Reference/')).every(allowedPublicReference),
+  'Only public standards markdown/catalog may ship; private/org reference content forbidden');
+for (const required of ['Reference/standards/README.md',
+                        'Reference/standards/catalog.yaml',
+                        'Reference/standards/nasa-requirements.md',
+                        'Reference/standards/security.md',
+                        'Reference/standards/experience.md'])
+  check(files.includes(required), `Public standards pack missing ${required}`);
+check(!files.some(p => p.startsWith('Reference/private/')),
+  'Never commit private reference content');
 check(!files.includes('.github/project-config.local.yaml') && !files.includes('.github/mcp.json'), 'No private config may ship');
 for (const heading of ['## Jira payload', '## Review notes (run docs only — not posted)'])
   check(read('docs/agent/templates/{story_id}-rewrite.md').includes(heading), `Missing rewrite boundary ${heading}`);

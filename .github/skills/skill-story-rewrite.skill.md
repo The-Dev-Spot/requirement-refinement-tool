@@ -28,6 +28,17 @@ that was not there**. Invoked by `story-rewriter`.
     verbatim to the log book, so it must be complete.
 - `docs/agent/runs/{story_id}/{story_id}-decision-log.md` (append: what changed and why)
 
+### Standards-grounded rewrite
+
+Use `Reference/standards/README.md` only for the *applicable* concerns surfaced
+in investigation/evaluation (APPLIES / UNKNOWN with cited reason). Convert a
+confirmed missing behavior into one **measurable** positive/negative outcome
+within the existing 3–6 AC target and eight-AC hard maximum; merge or split
+rather than add generic "secure/accessibile/scalable" criteria. If a standard
+recommends a control but the project has not adopted its exact target,
+mark `# OPEN QUESTION -> PO:` in the draft and keep reference rationale in
+review notes. Never claim a test, certification or legal verdict without evidence.
+
 ## Steps
 1. **Assess completeness.** If the story is a stub (minimal description, no ACs),
    this is a **draft-from-context** rewrite, not a polish. Use the gathered context

@@ -152,6 +152,64 @@ unreadable text to fit.
 
 ---
 
+## Standards applicability and evidence (cross-cutting DoR guidance)
+
+The **optional, public, versioned** [Clarity standards reference](../Reference/standards/README.md) supplies engineering, security, accessibility/UX, API, privacy and operational *challenge questions*. It **does not** establish an eleventh DoR dimension, new L-checks, default regulatory coverage, or an autonomous permission to write Jira/Linear/GitHub. This is a research-backed library, not ratified organization policy.
+
+At **INVESTIGATE**, select relevant topics from the [index](../Reference/standards/catalog.yaml) using verified story characteristics (interface/UI, personal data, auth, backend, CI, operations, native/mobile or AI-agent tool access). For each potentially relevant source record `APPLIES / NOT_APPLICABLE / UNKNOWN`, reason, publisher/version, exact link/section, checked date and trust/authority. **At most 2–5 material questions per story** should reach evaluation; an irrelevant standard is not a finding.
+
+At **EVALUATE**, use applicable evidence within the *existing* dimensions:
+- **D1/D3/D4** — missing build context, error/empty/offline behavior or measurable acceptance checks.
+- **D5** — concrete risk to a negative test/acceptance outcome, when the story exposes that risk.
+- **D6** — version/source authenticity, conflicts, unverified applicability or invented thresholds/constraints.
+- **D8/D9** — dependency and data/API/event contracts, including compatibility or error semantics for actual interface changes.
+- **D10** — relevant non-functional, security, privacy, usability/accessibility and observability characteristics. **DoR's existing Soft/Hard escalation rules still apply.**
+
+A published standard can explain **why a question matters**; it does **not automatically prove** that the project accepted a target (e.g. AA conformance, a timeout, 99.9% availability or an ASVS level). An unresolved material policy choice is `# OPEN QUESTION -> PO:`; never fabricate acceptance criteria or claim a legal certification. Binding project/regulatory policy must be separately verified with its actual owner and jurisdiction. A standards reference is not a substitute for tool-executed audit/CI: mark checks `NOT_RUN` when not performed.
+
+Place the detailed applicability table, source metadata, rationale and test results in **review evidence**, not in the lean handover payload. The story contains only decisions, constraints and criteria needed to implement and verify. If more than eight ACs are essential, split the story. [Examples](../Reference/standards/scenarios.md) show why a server-side bug should **not** inherit unrelated Android/Unity/WCAG requirements.
+
+---
+
+## Standards-informed review (contextual, not a new DoR dimension)
+
+The public [Clarity standards index](../Reference/standards/README.md) and
+[versioned source catalog](../Reference/standards/catalog.yaml) are **research
+references** to help the investigator/evaluator discover missing requirements.
+[NASA Appendix C](../Reference/standards/nasa-requirements.md) is a particularly
+useful baseline for clarity, completeness, consistency, traceability, correctness
+and verifiability; additional guides cover relevant engineering, API, security,
+privacy, accessibility/UX and operational concerns.
+
+**Applicability first.** Identify story type and actual affected technology,
+environment, interface, data sensitivity and user journey before selecting a
+guide. In review evidence, mark relevant standards `APPLIES`,
+`NOT_APPLICABLE` or `UNKNOWN` with reasons; ask at most 2–5 *material*
+challenge questions. A server-only defect is **not** expected to satisfy Unity
+playmode or native Android UI criteria. A UI-only story is not expected to define
+a backend SLO without a backend impact.
+
+**Existing gate only.** Standards findings are evaluated through **D1–D10**
+and **L1–L10** exactly as defined here: ambiguity D1/D4, unsupported facts
+D6, risk/negative outcomes D5, dependencies D8, interface/data D9, and
+security/UX/operability D10. No `D11`, new linter gate or compliance score
+is created. Keep relevant facts and observable outcomes in the **lean story**;
+put versioned source citations, applicability decisions and rationale in
+**review evidence**, no mandatory Confluence log-book needed to consult this
+public pack.
+
+**What versus how.** Challenge gratuitous implementation prescriptions unless
+the chosen technology is an explicitly approved design constraint. NASA's
+`shall/will/should` terminology is intended for formal system requirements;
+Clarity keeps its existing behavioral Gherkin/non-behavioral checklist contract.
+Do not synthesize numeric thresholds, legal obligations, security guarantees
+or design rules that the owner has not approved. If a required source or
+verification tool is unavailable, record `UNKNOWN` / `NOT_RUN`, never PASS.
+**Only an authorized owner or policy determines whether external guidance is
+binding.** A standards citation does not replace tests or human approval.
+
+---
+
 ## Dimensions
 
 Each story is scored per dimension: **PASS / WARN / FAIL**.

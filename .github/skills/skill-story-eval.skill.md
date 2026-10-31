@@ -11,6 +11,7 @@ thing without needing to ask?
 ## Reads
 - `rubric/definition-of-ready.md` (dimensions `D1..D10`, gate logic — the contract)
 - `docs/risk-register.md`, `steps/catalog.md`
+- `Reference/standards/README.md` and relevant linked topic guide(s), including `nasa-requirements.md` for clarity, consistency and verifiability; consult source versions in `catalog.yaml`. Record APPLIES / NOT_APPLICABLE / UNKNOWN and reason. Advisory standards **do not add a gate, grant approval, or become unconfirmed requirements**.
 - `docs/agent/runs/{story_id}/{story_id}-story-input.md` (the story + gathered context).
   **Important:** the story input includes both the Jira description AND the
   Acceptance Criteria Checklist (field ID from `.github/project-config.yaml`,
@@ -22,6 +23,21 @@ thing without needing to ask?
 ## Writes
 - `docs/agent/runs/{story_id}/{story_id}-eval-report.md` (scorecard + gate; replace-in-place)
 - `docs/agent/runs/{story_id}/{story_id}-decision-log.md` (append: non-trivial scoring calls)
+
+### Standards applicability (semantic stage; no new linter IDs)
+
+Read `Reference/standards/README.md` and `catalog.yaml` after classifying the
+story. Select 0–5 **material** engineering/security/UX/API/reliability sources
+using the actual user flow, repo/platform, risk and interfaces in evidence.
+For each assessed source record `APPLIES`, `NOT_APPLICABLE` or `UNKNOWN`,
+with reason, stable version, source URL/section and review date. If an external
+standard suggests a control that is **not approved for this product**, do not
+invent a target; raise a question instead.
+
+Map applicable findings to existing D1–D10 (especially D5/D6/D9/D10). Do not
+create L11/D11 or automatically FAIL for irrelevant guides. If a cited edition
+is changed/stale/unreachable, flag uncertainty; no fabricated compliance
+claim. A source lookup is not a test run. Record real test receipts or NOT_RUN.
 
 ## Steps
 1. **Run the deterministic layer first** (`skill-gherkin-lint`). If it reports

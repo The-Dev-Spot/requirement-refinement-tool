@@ -52,6 +52,21 @@ above 20,000. Checklist items over 250 characters warn. Tighten before adding;
 split when essential build details cannot fit. See the
 [fictional examples](../examples/lean-requirement.md).
 
+## Context-aware engineering standards
+
+Clarity can consult the [public standards pack](../Reference/standards/README.md)
+during investigation and evaluation. It uses
+[NASA's requirements validation checklist](../Reference/standards/nasa-requirements.md)
+as a research-based baseline and chooses only relevant API/security, UX,
+accessibility or operational questions for the actual story. It records the
+edition, source and applicability in private review evidence.
+
+This is not a universal compliance checklist, a substitute for code tests or a
+new readiness gate. The ten existing DoR dimensions and the AC budget still
+apply. `NOT_APPLICABLE`, `UNKNOWN` and `NOT_RUN` must be distinguished;
+unverified external recommendations are questions, not invented product
+requirements.
+
 ## Approval and resulting state
 
 Every Jira write needs explicit approval of the staged result. READY alone,

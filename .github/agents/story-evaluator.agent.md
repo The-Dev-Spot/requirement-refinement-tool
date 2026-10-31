@@ -26,6 +26,7 @@ first, then semantic scoring.
   as this story's requirements; use it to recognise when a gap is already answered
   elsewhere, or when a sibling story set a precedent this story should match.
 - `docs/agent/learnings.md`
+- `Reference/standards/README.md`, `Reference/standards/catalog.yaml` and selected topic guides (especially `nasa-requirements.md` for ambiguous requirements). Select by project/platform/risk, record relevance and versioned source in review evidence. Do not force UI standards on backend stories or invent binding policy.
 
 ## Writes
 - `docs/agent/runs/{story_id}/{story_id}-eval-report.md` (scorecard + gate; replace-in-place)
@@ -36,6 +37,14 @@ first, then semantic scoring.
 - `skill-gherkin-lint` (deterministic pre-flight — runs first)
 - `skill-story-eval` (semantic scoring + gate)
 - `skill-confluence-rag` (verify provenance claims against source)
+
+## Standards review
+
+At EVALUATE, use the risk-selected public references in
+`Reference/standards/README.md` and the source-index version; record relevance
+and D1–D10 findings in the eval evidence. Do not add a mandatory new dimension,
+assume a platform-wide accessibility/compliance obligation, or claim a test was
+run just because the standard was consulted.
 
 ## Responsibilities
 0. **Classify the story type first (DoR "Story types").** Behavioral → declarative
