@@ -72,7 +72,7 @@ test('missing risk register fails closed with NOT_RUN for required check',()=>{
  assert.deepEqual(r.required_not_run,['L5']);
 });
 test('empty public step catalog is advisory NOT_RUN, never falsely passes',()=>{
- const r=lintStory(backend(),{riskRegister:register,stepCatalog:'> Status: EMPTY'});
+ const r=lintStory(behavior(),{riskRegister:register,stepCatalog:'> Status: EMPTY'});
  assert.equal(r.checks.L8.status,'NOT_RUN');
  assert.equal(r.ready_for_handover,false);
 });
