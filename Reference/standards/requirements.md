@@ -5,6 +5,7 @@
 ## Research anchors
 
 - [ISO/IEC/IEEE 29148:2018](https://www.iso.org/standard/72089.html) — requirements-engineering processes; publicly available *abstract* and publisher metadata. Current edition confirmed by ISO in 2024; replacement in development. **Do not reproduce its licensed clauses**, or assert a clause-specific rule without access.
+- [NASA Systems Engineering Handbook — Appendix C: How to Write a Good Requirement](https://www.nasa.gov/reference/appendix-c-how-to-write-a-good-requirement/) — [Clarity's contextual adaptation](nasa-requirements.md) checks clarity, atomicity, completeness, consistency, traceability, correct level, realistic performance, reliability and verifiability. **NASA's `shall` convention is not mandatory for agile Gherkin.**
 - [NIST SSDF 1.1 / SP 800-218](https://csrc.nist.gov/projects/ssdf) — secure-development process evidence and preparing, protecting, producing and responding to vulnerabilities.
 - [DoR](../../rubric/definition-of-ready.md) — Clarity-specific **working-draft** readiness contract and AC format (primary local authority).
 
