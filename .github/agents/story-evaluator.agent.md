@@ -37,6 +37,14 @@ first, then semantic scoring.
 - `skill-story-eval` (semantic scoring + gate)
 - `skill-confluence-rag` (verify provenance claims against source)
 
+## Standards review
+
+At EVALUATE, use the risk-selected public references in
+`Reference/standards/README.md` and the source-index version; record relevance
+and D1–D10 findings in the eval evidence. Do not add a mandatory new dimension,
+assume a platform-wide accessibility/compliance obligation, or claim a test was
+run just because the standard was consulted.
+
 ## Responsibilities
 0. **Classify the story type first (DoR "Story types").** Behavioral → declarative
    Gherkin; non-behavioral (enabler/spike/infra/legal/process) → measurable-outcome
