@@ -59,5 +59,7 @@ jobs:
         run: python -m unittest discover -s tests -p 'test_quality_review.py' -v
       - name: Test draft acceptance contract safeguards (no authority)
         run: python -m unittest discover -s tests -p 'test_acceptance_contract_draft.py' -v
+      - name: Validate read-only acceptance proposal and tamper regressions
+        run: python -m unittest discover -s tests -p 'test_acceptance_proposal.py' -v
       - name: Verify runtime code compiles
-        run: python -m py_compile scripts/quality_review.py
+        run: python -m py_compile scripts/quality_review.py scripts/accept_requirements.py
