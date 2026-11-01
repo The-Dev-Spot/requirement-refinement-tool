@@ -226,8 +226,10 @@ def summarize(lint, results, policy, backend):
             reasons.append(stage + " " + report["verdict"])
         if report["questions"]:
             reasons.append(stage + " has open questions")
-        if any(f["severity"] in ("BLOCKER", "WARN") for f in report["findings"]):
-            reasons.append(stage + " has unresolved blocker or warning findings")
+        if any(f["severity"] == "BLOCKER" for f in report["findings"]):
+            reasons.append(stage + " identified material blocker")
+        if any(f["severity"] == "WARN" for f in report["findings"]):
+            reasons.append(stage + " has unresolved warning findings")
     if results.get("evaluator"):
         if any(d["status"] != "PASS" for d in results["evaluator"]["dimensions"]):
             reasons.append("D1-D10 not all PASS")
