@@ -9,6 +9,7 @@ adoption and trusted Forge City handoff remain separate human/system decisions.
 from __future__ import annotations
 
 import argparse
+import copy
 import hashlib
 import json
 import os
@@ -23,7 +24,13 @@ import uuid
 STAGES = ("investigator", "evaluator", "challenger")
 RUBRIC_FILE = Path(__file__).resolve().parents[1] / "rubric/definition-of-ready.md"
 INHERITED_SESSION_ENV = ("CLAUDE_CODE_SESSION_ID", "CLAUDECODE", "CLAUDE_CODE_CHILD_SESSION",
-                         "CLAUDE_CODE_PARENT_SESSION_ID", "CLAUDE_CODE_FORCE_SESSION_PERSISTENCE")
+                         "CLAUDE_CODE_PARENT_SESSION_ID", "CLAUDE_CODE_FORCE_SESSION_PERSISTENCE",
+                         "CLAUDE_CODE_REMOTE_SESSION_ID", "CLAUDE_CODE_SESSION_ORIGIN",
+                         "CLAUDE_CODE_SESSION_ATTENDED", "CLAUDE_SESSION_INGRESS_TOKEN_FILE",
+                         "SESSION_INGRESS_URL", "TRACEPARENT",
+                         "CLAUDE_CODE_MESSAGING_TOKEN", "CLAUDE_CODE_MESSAGING_SOCKET")
+HOSTED_SESSION_INDICATORS = ("CLAUDE_CODE_REMOTE_SESSION_ID",
+                             "CLAUDE_SESSION_INGRESS_TOKEN_FILE", "SESSION_INGRESS_URL")
 
 DIMS = tuple(f"D{i}" for i in range(1, 11))
 ALLOWED = {"PASS", "WARN", "FAIL", "NOT_RUN"}
@@ -60,6 +67,49 @@ OUTPUT_SCHEMA = {
         "summary": {"type": "string"}
     }, "required": ["stage", "verdict", "dimensions", "findings", "questions", "summary"]
 }
+
+
+def output_schema_for(stage):
+    """Use the same invariant result fields, with *stage-specific* constraints.
+
+    LLM structured output must never encourage an investigator/challenger to
+    emit D1-D10. The host still validates every field after inference.
+    """
+    if stage not in STAGES:
+        raise ValueError("Unknown review stage")
+    schema = copy.deepcopy(OUTPUT_SCHEMA)
+    schema["properties"]["stage"]["enum"] = [stage]
+    dimensions = schema["properties"]["dimensions"]
+    if stage == "evaluator":
+        dimensions["minItems"] = 10
+        dimensions["maxItems"] = 10
+    else:
+        dimensions["maxItems"] = 0
+    return schema
+
+
+class StageInvocationFailure(ValueError):
+    """Bounded evidence of an unsuccessful provider stage, never an approval."""
+    def __init__(self, stage, code, message, raw_envelope=None):
+        super().__init__(message)
+        self.stage, self.code = stage, code
+        # Raw model output can contain customer details. Store only in the
+        # operator-local private report, never a public CI artifact.
+        self.raw_envelope = raw_envelope
+
+
+def is_hosted_session():
+    # In a managed session container, stripping a few variables cannot prove
+    # that a nested Claude CLI owns its own auth or independent session.
+    return any(os.environ.get(name) for name in HOSTED_SESSION_INDICATORS)
+
+
+def failure_record(error):
+    raw = error.raw_envelope
+    return {"stage": error.stage, "code": error.code,
+            "message": str(error)[:500],
+            "raw_envelope_sha256": digest(raw.encode("utf-8")) if raw is not None else None,
+            "raw_envelope": raw}
 
 
 def canonical(obj):
@@ -189,13 +239,16 @@ def prompt_for(stage, story, policy, investigation=None, rubric=None):
     if not rubric or "D4 | Testable & precise" not in rubric:
         raise ValueError("Missing authoritative dimension definitions")
     if stage == "investigator":
-        task = "Determine story intent, provenance, dependencies, project-authority conflicts, hidden decisions and unresolved questions. Return findings, no D scores."
+        task = ("Determine story intent, provenance, dependencies, project-authority conflicts, hidden decisions "
+                "and unresolved questions. Return findings and questions. The dimensions field MUST be [] "
+                "because only the evaluator scores D1-D10.")
     elif stage == "evaluator":
         task = "Score D1-D10 for the exact story using project policy and investigator's evidence. Hard failures and relevant risk escalation must be explained. Return all D scores."
     else:
         task = ("Fresh independent cold-read CHALLENGE. Do NOT rely on first evaluator's verdict or investigator's summary. "
                 "Seek a counterexample: conflicting decisions, unsupported assumptions, hidden context, missing negative outcomes, "
-                "data/interface contract gaps, test-oracle holes. Return findings and verdict, NOT D scores.")
+                "data/interface contract gaps, test-oracle holes. Return findings and verdict, "
+                "and dimensions MUST be [] because only the evaluator scores D1-D10.")
     data = {"original_story": story, "project_policy_snapshot": policy}
     if stage == "evaluator":
         data["investigator_evidence"] = investigation
@@ -255,10 +308,15 @@ def run_claude(stage, prompt, *, model, timeout, max_budget):
                "--disallowedTools", "mcp__*", "--permission-mode", "dontAsk",
                "--no-session-persistence", "--max-turns", "1",
                "--max-budget-usd", str(max_budget), "--output-format", "json",
-               "--json-schema", canonical(OUTPUT_SCHEMA)]
+               "--json-schema", canonical(output_schema_for(stage))]
     if model:
         command.extend(["--model", model])
     command.append("Review the complete requirements packet supplied on stdin, and return the requested JSON.")
+    # Fail before spending tokens in a managed host session. The observed
+    # hosted claude.ai session reused the orchestrator's session identity.
+    if is_hosted_session():
+        raise StageInvocationFailure(stage, "HOSTED_SESSION_NOT_ISOLATED",
+                                     "Hosted Claude session cannot prove an independent child session; use a separately authenticated trusted host")
     # Deliberately provide source material only on stdin; never put customer
     # details in process argv or shell history.
     started = time.monotonic()
@@ -266,8 +324,16 @@ def run_claude(stage, prompt, *, model, timeout, max_budget):
                               timeout=timeout, check=False, cwd=tempfile.gettempdir(),
                               env=sanitized_env())
     if response.returncode or len(response.stdout) > MAX_OUTPUT:
-        raise ValueError("Model invocation failed or exceeded result size")
-    data, meta = extract_structured(response.stdout)
+        raise StageInvocationFailure(stage, "MODEL_COMMAND_FAILED",
+                                     "Model command failed or output exceeded safety limit",
+                                     response.stdout[:MAX_OUTPUT])
+    try:
+        data, meta = extract_structured(response.stdout)
+        check_stage(stage, data)
+    except (ValueError, KeyError, TypeError) as exc:
+        raise StageInvocationFailure(stage, "MODEL_STAGE_SCHEMA_INVALID",
+                                     "Provider returned invalid structured stage output: " + str(exc),
+                                     response.stdout) from exc
     resolved = meta.get("model")
     models_used = meta.get("model_usage_models") or []
     verified = (model_matches(model, resolved) and
@@ -291,15 +357,23 @@ def run_adapter(stage, prompt, *, model, adapter, timeout):
     if adapter is None or not adapter.is_absolute() or adapter.suffix != ".py" or adapter.is_symlink() or not adapter.is_file():
         raise ValueError("A trusted absolute regular .py adapter file is required")
     request = {"protocol_version": 1, "stage": stage, "model_requested": model,
-               "prompt": prompt, "output_schema": OUTPUT_SCHEMA}
+               "prompt": prompt, "output_schema": output_schema_for(stage)}
     started = time.monotonic()
     response = subprocess.run([sys.executable, str(adapter)], input=canonical(request),
                               text=True, capture_output=True, check=False,
                               timeout=timeout, cwd=tempfile.gettempdir(),
                               env=sanitized_env())
     if response.returncode or len(response.stdout) > MAX_OUTPUT:
-        raise ValueError("Adapter failed or returned an oversized result")
-    data, meta = extract_structured(response.stdout)
+        raise StageInvocationFailure(stage, "ADAPTER_COMMAND_FAILED",
+                                     "Provider adapter failed or exceeded safety limit",
+                                     response.stdout[:MAX_OUTPUT])
+    try:
+        data, meta = extract_structured(response.stdout)
+        check_stage(stage, data)
+    except (ValueError, KeyError, TypeError) as exc:
+        raise StageInvocationFailure(stage, "MODEL_STAGE_SCHEMA_INVALID",
+                                     "Provider adapter returned invalid stage output: " + str(exc),
+                                     response.stdout) from exc
     resolved = meta.get("model")
     return check_stage(stage, data), {"backend": "provider-adapter",
                                       "elapsed_s": round(time.monotonic() - started, 2),
@@ -370,7 +444,7 @@ def summarize(lint, results, policy, backend, receipts=None):
 def review(story, policy, *, lint, provider, model=None, timeout=120, max_budget=1.0,
            fixture_dir=None, pilot_draft_policy=False, adapter=None):
     verify_inputs(story, policy)
-    results, receipts = {}, {}
+    results, receipts, failures = {}, {}, []
     rubric, rubric_sha = rubric_packet()
     if lint.get("kind") != "clarity-deterministic-quality-report":
         raise ValueError("Missing real deterministic report")
@@ -396,12 +470,27 @@ def review(story, policy, *, lint, provider, model=None, timeout=120, max_budget
             meta = {"backend": "fixture", "synthetic": True}
         else:
             prompt = prompt_for(stage, story, policy, results.get("investigator"), rubric=rubric)
-            if provider == "claude":
-                data, meta = run_claude(stage, prompt, model=model, timeout=timeout, max_budget=max_budget)
-            elif provider == "adapter":
-                data, meta = run_adapter(stage, prompt, model=model, adapter=adapter, timeout=timeout)
-            else:
-                raise ValueError("Unknown review provider")
+            try:
+                if provider == "claude":
+                    data, meta = run_claude(stage, prompt, model=model, timeout=timeout, max_budget=max_budget)
+                elif provider == "adapter":
+                    data, meta = run_adapter(stage, prompt, model=model, adapter=adapter, timeout=timeout)
+                else:
+                    raise ValueError("Unknown review provider")
+            except StageInvocationFailure as error:
+                failures.append(failure_record(error))
+                return {"results": results, "receipts": receipts, "failures": failures,
+                        "aggregate": summarize(lint, results, policy, provider, receipts=receipts)}
+            except subprocess.TimeoutExpired as error:
+                failures.append(failure_record(StageInvocationFailure(
+                    stage, "MODEL_TIMEOUT", "Provider invocation timed out")))
+                return {"results": results, "receipts": receipts, "failures": failures,
+                        "aggregate": summarize(lint, results, policy, provider, receipts=receipts)}
+            except (OSError, ValueError) as error:
+                failures.append(failure_record(StageInvocationFailure(
+                    stage, "PROVIDER_RUNTIME_ERROR", str(error)[:450])))
+                return {"results": results, "receipts": receipts, "failures": failures,
+                        "aggregate": summarize(lint, results, policy, provider, receipts=receipts)}
         results[stage] = data
         actual_prompt = prompt_for(stage, story, policy, results.get("investigator") if stage == "evaluator" else None, rubric=rubric)
         receipts[stage] = {"run_id": str(uuid.uuid4()), "input_sha256": digest(canonical(story).encode()),
@@ -416,10 +505,29 @@ def review(story, policy, *, lint, provider, model=None, timeout=120, max_budget
             if (meta.get("model_verified") is not True or
                 not isinstance(meta.get("session_id"), str) or
                 not meta["session_id"] or len(set(ids)) != len(ids)):
-                return {"results": results, "receipts": receipts,
+                failures.append({
+                    "stage": stage,
+                    "code": ("MODEL_IDENTITY_UNVERIFIED" if meta.get("model_verified") is not True
+                             else "NONINDEPENDENT_REVIEW_SESSIONS"),
+                    "message": "Model identity/session provenance could not be verified",
+                    "raw_envelope_sha256": None, "raw_envelope": None
+                })
+                return {"results": results, "receipts": receipts, "failures": failures,
                         "aggregate": summarize(lint, results, policy, provider, receipts=receipts)}
-    return {"results": results, "receipts": receipts,
+    return {"results": results, "receipts": receipts, "failures": failures,
             "aggregate": summarize(lint, results, policy, provider, receipts=receipts)}
+
+
+def write_private_report(path: Path, report: dict):
+    """Exclusive, mode-0600 local evidence. Never overwrite or upload elsewhere."""
+    path = path.absolute()
+    if path.is_symlink() or any(parent.is_symlink() for parent in path.parents):
+        raise ValueError("Symlinked report path is not permitted")
+    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as handle:
+        json.dump(report, handle, indent=2, ensure_ascii=True)
+        handle.write("\n")
 
 
 def main():
@@ -473,11 +581,7 @@ def main():
                                 max_budget=args.max_budget_usd, fixture_dir=args.fixture_dir,
                                 pilot_draft_policy=args.pilot_with_draft_policy,
                                 adapter=args.adapter_script)}
-        args.output.parent.mkdir(parents=True, exist_ok=True)
-        with args.output.open("x", encoding="utf-8") as handle:
-            os.chmod(args.output, 0o600)
-            json.dump(report, handle, indent=2)
-            handle.write("\n")
+        write_private_report(args.output, report)
         print("Review complete: " + report["run"]["aggregate"]["status"] +
               " (never authorizes tracker writes or code execution)")
         return 0 if report["run"]["aggregate"]["status"] == "REVIEWABLE_CANDIDATE" else 3

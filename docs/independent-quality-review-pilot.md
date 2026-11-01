@@ -81,6 +81,49 @@ authenticate the provider's claims. Do not run an adapter supplied in a ticket.
 running mechanical L1–L10, and `--model` must be explicitly set for live
 reviews. CI tests use synthetic responses and never call paid models.
 
+## 2026-11-01 Opus 5.5 pilot: stage schema and hosted runner correction
+
+The [HOM-1972 rerun](../docs/m0-cross-model-acceptance-benchmark.md)
+exposed an important distinction: Opus 5.5 was explicitly requested, but
+the nested hosted Claude Code CLI returned `model: null` and used both
+`claude-opus-5-5` and an auxiliary `claude-haiku-5-5` in `modelUsage`.
+Token share cannot prove which model generated the stage result. The same
+session ID as the hosting Claude conversation was reused, despite earlier
+environment cleanup. **This is NOT valid multi-session model provenance.**
+
+Clarity now passes **stage-specific structured-output schemas** to both
+Claude CLI and provider adapters. Investigator and challenger require
+`dimensions: []` (`maxItems: 0`); evaluator requires exactly 10. The
+independent host validator continues rejecting violations. A provider
+stage that returns malformed data now produces a **private, mode-0600 BLOCKED
+report** with failure code, SHA-256 and bounded **raw provider envelope**,
+instead of silently dropping the evidence. The raw output may contain private
+issue content; keep reports outside the public repository and apply your
+normal retention controls. Never upload raw receipts to public CI artifacts.
+
+**Hosted Claude sessions are not standalone review workers.** Clarity detects
+known hosted session/ingress markers and returns
+`HOSTED_SESSION_NOT_ISOLATED` before spending inference. On a separately
+authenticated operator-controlled host (e.g. R720-AI or a workstation),
+run the unmodified Claude CLI with its own legitimate login and explicitly
+specified model. A hosted claude.ai parent conversation, a model name in
+an n8n event, or `modelUsage` with multiple model IDs is insufficient to
+prove three independent reviewer sessions.
+
+When CLI output lacks an authoritative top-level resolved model and lists
+multiple models, the result **remains BLOCKED**. Do not infer the main
+model from output-token counts, and do not fabricate `model_verified`.
+For providers whose native CLI cannot report verifiable model/session data,
+use a trusted operator-owned API adapter that records the actual provider
+model and request identity via supported provider response fields.
+That adapter and its attestation still require qualification: an arbitrary
+adapter echoing the requested model is not trustworthy.
+
+Repeat HOM-1972 only from a properly authenticated, independent host with
+Node.js 24+, version-locked sources, the exact policy and the fixed Clarity
+runner. Do not rerun nested inside a hosted conversation simply to get
+another BLOCKED result.
+
 ## What runs
 
 1. Node-based L1–L10 preflight using Clarity's pinned Cucumber parser, optional operator-selected approved risk register, and stable input hash. A mechanical FAIL/BLOCKED or missing approved policy **stops before model usage**.
