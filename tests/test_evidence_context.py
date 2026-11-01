@@ -19,6 +19,8 @@ def policy():
     return {"project":"Synthetic Forge City","decisions":[],
             "adopted":False,"risk_register_status":"DRAFT",
             "review_scope":"PILOT_RC",
+            "evidence_allowed_repositories":["The-Dev-Spot/homelab"],
+            "evidence_linear_workspace":"sashafelix-homelab",
             "decision_register":[{
                 "id":"PILOT_A","scope":"PILOT_RC","status":"ACTIVE",
                 "source":"Synthetic authority claim", "revision":"v1",
@@ -101,6 +103,21 @@ class EvidenceContextTests(unittest.TestCase):
         context["sources"][1]["url"]="https://evil.example/steal"
         with self.assertRaisesRegex(ValueError,"pinned"):
             validate_evidence_packet(context,story(),policy())
+
+    def test_repo_and_workspace_allowlist_cannot_be_bypassed(self):
+        p=policy()
+        p["evidence_allowed_repositories"]=[]
+        with self.assertRaisesRegex(ValueError,"trusted allowlist"):
+            # Packet must be freshly bound to the changed policy.
+            ctx=pack()
+            ctx["policy_sha256"]=digest(canonical(p).encode())
+            validate_evidence_packet(ctx,story(),p)
+        p=policy()
+        p["evidence_linear_workspace"]="someone-else"
+        ctx=pack()
+        ctx["policy_sha256"]=digest(canonical(p).encode())
+        with self.assertRaisesRegex(ValueError,"Linear workspace"):
+            validate_evidence_packet(ctx,story(),p)
 
     def test_reject_code_as_approved_policy(self):
         context=pack()
