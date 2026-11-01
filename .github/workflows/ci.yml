@@ -57,6 +57,8 @@ jobs:
         run: npm ci --ignore-scripts --prefix .github/validation
       - name: Run independent-session runner contract tests (synthetic, no model)
         run: python -m unittest discover -s tests -p 'test_quality_review.py' -v
+      - name: Test scoped decision contracts (synthetic, no model)
+        run: python -m unittest discover -s tests -p 'test_decision_scopes.py' -v
       - name: Test draft acceptance contract safeguards (no authority)
         run: python -m unittest discover -s tests -p 'test_acceptance_contract_draft.py' -v
       - name: Validate read-only acceptance proposal and tamper regressions
@@ -64,4 +66,4 @@ jobs:
       - name: Compare review outcomes across synthetic model variants and golden cases
         run: python -m unittest discover -s tests -p 'test_benchmark_review_consistency.py' -v
       - name: Verify runtime code compiles
-        run: python -m py_compile scripts/quality_review.py scripts/accept_requirements.py scripts/benchmark_review_consistency.py
+        run: python -m py_compile scripts/quality_review.py scripts/decision_scopes.py scripts/accept_requirements.py scripts/benchmark_review_consistency.py
