@@ -203,6 +203,57 @@ production readiness bypass.**
 
 The report contains input/policy hashes, actual preflight result, invocation IDs and model-provided output/metadata, plus a machine-derived aggregate. It does **not** attest that input policy was approved by a cryptographically verified owner or that model findings were factually correct. These require a trusted supervisor and human adoption before advancing to automatic Forge City dispatch.
 
+## Offline question proposal outbox (HOM-1986, initial delivery)
+
+Clarity can now **extract** questions from an already-completed local
+independent-review report, without making Slack/network/connector calls.
+The reviewer remains isolated and has **no** issue writer, Slack token,
+acceptance issuer, or Forge dispatch authority. Do not run this inside
+an untrusted PR job with sensitive source.
+
+From an operator-owned Python environment with access to the same
+Clarity scripts and a mode-0600 private review report:
+
+```sh
+python3 scripts/export_review_questions.py \
+  --report /private/reports/<run>.review.json \
+  --private-output /private/questions/<run>.proposals.json \
+  --outbox-output /private/outbox/<run>.notification.json
+```
+
+This command writes **two exclusive mode-0600 JSON files**:
+
+- Private proposals: source/policy/rubric review SHA, report SHA, stable
+  batch/question IDs, each original proposed question and list of stages
+  asking it, and explicit `authority: UNVERIFIED`. Only an authenticated,
+  role-bound coordinator may present them to a user or modify a tracker.
+- Sanitized notification event: deterministic event ID, SHA-backed batch
+  identity, count, review status and permission flags. **No questions,
+  findings, prompts, raw model output, credentials, session ID or private
+  path** are copied into the outbox. A separate trusted service may eventually
+  consume this event and send a deduplicated Slack notification with a link
+  to authenticated question collection. No such service is included here.
+
+Stage question proposals require the stage's real Clarity result plus
+matching locally verified model/session metadata. Invalid, malformed,
+group-readable or symlinked reports fail closed. The exporter does **not**
+cryptographically attest provider identity or original tracker authority:
+`reviewed_input_sha256` is the **review packet digest**, not an
+independently fetched canonical Linear/Jira issue revision. Only the
+trusted Forge City gateway can bind it to an authenticated source.
+
+If no questions were emitted but quality remains BLOCKED, the outbox
+marks `REVIEW_BLOCKED_WITHOUT_QUESTIONS`, not success. The outbox is a
+*proposal*, never `ACCEPTED_FOR_FORGE`; notifications and human answers
+must not auto-approve or release work to Forge. Retries must deduplicate by
+event ID; the CLI deliberately never overwrites an existing report/event.
+Use new per-run output paths and the coordinator's durable event ledger
+when wiring the service.
+
+Design: [HOM-1986](https://linear.app/sashafelix-homelab/issue/HOM-1986).
+Slack endpoint, authenticated owner answers, source compare-and-swap,
+worker queue and re-review are **not yet implemented** in Clarity.
+
 ## Opt-in scoped decision provenance (HOM-1985)
 
 A reviewed source can contain **pilot-only**, **target-system**, and
