@@ -206,8 +206,11 @@ def run_claude(stage, prompt, *, model, timeout, max_budget):
 
 def summarize(lint, results, policy, backend):
     reasons = []
-    if lint.get("status") in ("FAIL", "BLOCKED"):
-        reasons.append("deterministic " + lint["status"])
+    # Deterministic PASS is a prerequisite for even a reviewable candidate.
+    # A WARN is intentionally available for a diagnostic model pass, but is
+    # never permission to proceed. Unknown statuses are also fail-closed.
+    if lint.get("status") != "PASS":
+        reasons.append("deterministic " + str(lint.get("status", "NOT_RUN")))
     if lint.get("open_question_count", 0) > 0:
         reasons.append("unresolved story question(s)")
     if not policy.get("adopted"):
@@ -223,8 +226,8 @@ def summarize(lint, results, policy, backend):
             reasons.append(stage + " " + report["verdict"])
         if report["questions"]:
             reasons.append(stage + " has open questions")
-        if any(f["severity"] == "BLOCKER" for f in report["findings"]):
-            reasons.append(stage + " identified material blocker")
+        if any(f["severity"] in ("BLOCKER", "WARN") for f in report["findings"]):
+            reasons.append(stage + " has unresolved blocker or warning findings")
     if results.get("evaluator"):
         if any(d["status"] != "PASS" for d in results["evaluator"]["dimensions"]):
             reasons.append("D1-D10 not all PASS")
@@ -246,6 +249,8 @@ def review(story, policy, *, lint, provider, model=None, timeout=120, max_budget
     results, receipts = {}, {}
     if lint.get("kind") != "clarity-deterministic-quality-report":
         raise ValueError("Missing real deterministic report")
+    if lint.get("status") not in ("PASS", "WARN", "FAIL", "BLOCKED"):
+        raise ValueError("Unknown deterministic status; cannot establish acceptance")
     if lint["status"] in ("FAIL", "BLOCKED") or (
         (not policy.get("adopted") or policy.get("risk_register_status") != "APPROVED")
         and not pilot_draft_policy
