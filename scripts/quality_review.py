@@ -428,6 +428,11 @@ def main():
         verify_inputs(story, policy)
         here = Path(__file__).resolve().parents[1]
         node = here / ".github/validation/quality-gate.mjs"
+        node_version = subprocess.run(["node", "--version"], capture_output=True, text=True,
+                                      timeout=10, check=False)
+        match = re.fullmatch(r"v?(\d+)\.\d+\.\d+\s*", node_version.stdout)
+        if node_version.returncode != 0 or not match or int(match.group(1)) < 24:
+            raise ValueError("Clarity deterministic checker requires Node.js 24 or later")
         lint_cmd = ["node", str(node), "--input", str(args.input)]
         if policy.get("risk_register_status") == "APPROVED":
             lint_cmd.extend(["--risk-register", str(Path(policy["risk_register_path"]).resolve())])
@@ -438,6 +443,7 @@ def main():
         report = {"schema_version": 1, "kind": "clarity-independent-review",
                   "input_file_sha256": digest(args.input.read_bytes()),
                   "policy_file_sha256": digest(args.policy.read_bytes()),
+                  "rubric_file_sha256": rubric_packet()[1],
                   "deterministic": lint,
                   "pilot_with_draft_policy": args.pilot_with_draft_policy,
                   "run": review(story, policy, lint=lint, provider=args.provider,
