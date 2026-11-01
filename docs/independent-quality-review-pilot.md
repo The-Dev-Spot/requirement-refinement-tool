@@ -203,6 +203,63 @@ production readiness bypass.**
 
 The report contains input/policy hashes, actual preflight result, invocation IDs and model-provided output/metadata, plus a machine-derived aggregate. It does **not** attest that input policy was approved by a cryptographically verified owner or that model findings were factually correct. These require a trusted supervisor and human adoption before advancing to automatic Forge City dispatch.
 
+## Evidence-first context from Linear and GitHub (HOM-1989, experimental)
+
+Clarity can now **consume a pre-collected read-only, source-pinned context
+packet** using `--evidence-pack /private/context.json`. This is **not a
+GitHub/Linear API client**: credentials and API calls belong to a future
+independent, allowlisted coordinator, NOT the isolated model reviewer.
+The optional input preserves backward compatibility with legacy reviews.
+
+The operator-selected project policy must explicitly include
+`evidence_allowed_repositories` (e.g. `["The-Dev-Spot/homelab"]`)
+and `evidence_linear_workspace` (e.g. `"sashafelix-homelab"`).
+The validator rejects GitHub URLs to any other repository and Linear
+URLs outside that workspace. These remain *claimed* allowlists until the
+trusted collector independently enforces the same scope through credential
+permissions and an authenticated project registry.
+
+Evidence packet v1 is a JSON object with *exact* keys:
+`schema_version: 1`, `kind: "clarity-context-evidence"`,
+`target_issue` (e.g. HOM-1972), `story_sha256`, `policy_sha256`,
+`review_scope`, `freshness: "SOURCE_UNVERIFIED" | "SOURCE_CHANGED"`,
+and `sources` (1..30 entries). Digests of the story/policy are hashes of
+canonical JSON (sorted keys, compact separators, ASCII escaped). Each source
+has: `id` (S-001), `provider` (linear/github), `url`, `revision`,
+`scope`, `source_kind` (ISSUE/DECISION/DOCUMENT/CODE/TEST),
+`authority_claim` (UNVERIFIED/CLAIMED_ACTIVE/DRAFT/HISTORICAL/IMPLEMENTATION),
+`excerpt` and its `excerpt_sha256`. Source quotes are limited to 3200
+characters each. GitHub evidence requires an **exact 40-char commit SHA** in
+both its revision and `/blob/{commit}/path` URL. Linear evidence requires a
+specific issue/document URL and source revision claim.
+
+`authority_claim` is deliberately a **claim**, never verified governance.
+GitHub code or tests may show implemented behavior but may **not** ratify
+requirements; a newer Linear comment is not automatic owner approval.
+Original pilot and future target can use different `scope` values. All three
+independent reviewer prompts include the same packet as **untrusted source
+data**, with instructions to cite relevant source IDs and avoid re-asking
+answered questions. The cold challenger still receives *no investigator or
+evaluator output*.
+
+**Fail closed:** this v1 packet has no cryptographically authenticated
+current-tracker/owner issuer. `CURRENT_VERIFIED` is not an allowed value.
+Even a model review that seems clean remains `BLOCKED` for external-source
+freshness/authority, and any `SOURCE_CHANGED` packet records a separate
+staleness reason. The existing draft DoR/risk register and any open questions
+still block independently. No tracker writes, network access, Slack sending,
+auto acceptance or Forge dispatch are added. Do **not** reuse the original
+2026-11-01 historical pilot SHAs for the normalized HOM-1972 story.
+
+A trusted collector is still needed to retrieve a versioned current Linear
+issue/project/decision snapshot plus GitHub allowlisted files at fixed commit
+SHA, bind the exact owner-adopted policy and verify freshness, then deliver
+this private packet. A later trusted acceptance issuer is separately
+responsible for any `ACCEPTED_FOR_FORGE` status. The first synthetic tests
+verify safe citations, stale/bad digest rejection and no unearned PASS.
+
+Tracking: [HOM-1989](https://linear.app/sashafelix-homelab/issue/HOM-1989).
+
 ## Offline question proposal outbox (HOM-1986, initial delivery)
 
 Clarity can now **extract** questions from an already-completed local
