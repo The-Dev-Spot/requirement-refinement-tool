@@ -211,6 +211,14 @@ GitHub/Linear API client**: credentials and API calls belong to a future
 independent, allowlisted coordinator, NOT the isolated model reviewer.
 The optional input preserves backward compatibility with legacy reviews.
 
+The operator-selected project policy must explicitly include
+`evidence_allowed_repositories` (e.g. `["The-Dev-Spot/homelab"]`)
+and `evidence_linear_workspace` (e.g. `"sashafelix-homelab"`).
+The validator rejects GitHub URLs to any other repository and Linear
+URLs outside that workspace. These remain *claimed* allowlists until the
+trusted collector independently enforces the same scope through credential
+permissions and an authenticated project registry.
+
 Evidence packet v1 is a JSON object with *exact* keys:
 `schema_version: 1`, `kind: "clarity-context-evidence"`,
 `target_issue` (e.g. HOM-1972), `story_sha256`, `policy_sha256`,
