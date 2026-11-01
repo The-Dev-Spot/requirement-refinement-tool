@@ -90,6 +90,38 @@ class ReviewContractTests(unittest.TestCase):
         self.assertFalse(x["ready_for_handover"])
         self.assertFalse(x["publication_authority"])
 
+    def test_deterministic_warn_does_not_become_reviewable_candidate(self):
+        # Regression: previously WARN fell through to REVIEWABLE_CANDIDATE.
+        results={s:result(s) for s in ("investigator","evaluator","challenger")}
+        agg=summarize(lint("WARN"),results,policy(),"claude")
+        self.assertEqual(agg["status"],"BLOCKED")
+        self.assertFalse(agg["ready_for_handover"])
+        self.assertTrue(any("deterministic WARN" in reason for reason in agg["reasons"]))
+
+    def test_deterministic_warn_allows_diagnostic_review_not_acceptance(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            for stage in ("investigator","evaluator","challenger"):
+                (Path(tmp)/(stage+".json")).write_text(json.dumps(result(stage)))
+            reviewed=review(story(),policy(),lint=lint("WARN"),provider="fixtures",fixture_dir=tmp)
+        self.assertEqual(set(reviewed["results"]),{"investigator","evaluator","challenger"})
+        self.assertEqual(reviewed["aggregate"]["status"],"BLOCKED")
+        self.assertFalse(reviewed["aggregate"]["publication_authority"])
+
+    def test_invalid_linter_outcome_rejected_before_model_use(self):
+        with patch("quality_review.run_claude",side_effect=AssertionError("Model must not run")):
+            with self.assertRaisesRegex(ValueError,"Unknown deterministic status"):
+                review(story(),policy(),lint=lint("READY"),provider="claude")
+
+    def test_semantic_warn_finding_cannot_hide_behind_pass_verdict(self):
+        # A model declaring PASS while emitting an open warning is not clean.
+        results={s:result(s) for s in ("investigator","evaluator","challenger")}
+        results["challenger"]["findings"]=[{
+            "id":"F-2","severity":"WARN","summary":"Unresolved ambiguity",
+            "source":"Synthetic requirement AC-2","proposed_action":"Clarify expected result"}]
+        agg=summarize(lint(),results,policy(),"claude")
+        self.assertEqual(agg["status"],"BLOCKED")
+        self.assertTrue(any("warning findings" in reason for reason in agg["reasons"]))
+
     def test_missing_project_policy_blocks(self):
         pol=policy();pol["adopted"]=False;pol["risk_register_status"]="MISSING"
         results={s:result(s) for s in ("investigator","evaluator","challenger")}

@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "kind": "clarity-acceptance-policy-template",
+  "status": "DRAFT",
+  "project": "SYNTHETIC_EXAMPLE_ONLY",
+  "approval": {
+    "authority_source": "TRUSTED_SUPERVISOR_NOT_SUPPLIED_BY_STORY",
+    "principal_verification": "REQUIRED",
+    "do_r_and_risk_policy_ratified": false
+  },
+  "checks": {
+    "require_deterministic_pass": true,
+    "require_all_semantic_dimensions_pass": true,
+    "require_independent_review": true,
+    "require_zero_open_questions": true,
+    "require_zero_unresolved_findings": true,
+    "require_exact_source_and_handoff_sha256": true
+  },
+  "auto_accept": {
+    "enabled": false,
+    "allowed_story_types": [
+      "behavioral",
+      "non-behavioral"
+    ],
+    "allowed_risk_levels": [
+      "LOW"
+    ],
+    "forbidden_triggers": [
+      "authn_or_authz_change",
+      "personal_data_or_privacy",
+      "production_data_mutation",
+      "cross_service_contract_change",
+      "breaking_api",
+      "schema_migration",
+      "security_control_change",
+      "major_architecture_change"
+    ],
+    "never_grants": [
+      "workorder_execution",
+      "production_change",
+      "merge",
+      "deploy",
+      "secret_access",
+      "critical_lane"
+    ]
+  },
+  "human_acceptance": {
+    "required_for": [
+      "HIGH_OR_UNKNOWN_RISK",
+      "UNRESOLVED_SOURCE_CONFLICT",
+      "NO_AUTHENTICATED_APPROVAL_POLICY"
+    ],
+    "verified_owner_required": true
+  }
+}
