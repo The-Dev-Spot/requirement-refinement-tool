@@ -17,7 +17,14 @@ def story():
 
 def policy():
     return {"project":"Synthetic Forge City","decisions":[],
-            "adopted":False,"risk_register_status":"DRAFT"}
+            "adopted":False,"risk_register_status":"DRAFT",
+            "review_scope":"PILOT_RC",
+            "decision_register":[{
+                "id":"PILOT_A","scope":"PILOT_RC","status":"ACTIVE",
+                "source":"Synthetic authority claim", "revision":"v1",
+                "authority":"owner-claim-not-verified","text":"One manual pilot",
+                "supersedes":[]
+            }]}
 
 
 def pack():
