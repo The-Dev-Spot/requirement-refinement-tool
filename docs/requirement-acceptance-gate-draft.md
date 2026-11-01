@@ -1,6 +1,52 @@
 # Requirement Acceptance Gate — implementation draft
 
-**Status: PROPOSAL, not implemented or ratified.** Architecture draft, 2026-11-01.
+**Status: READ-ONLY PROPOSAL VALIDATOR IMPLEMENTED; trusted ACCEPTED issuer
+NOT implemented or ratified.** Architecture draft, 2026-11-01.
+
+## Implemented validation slice (non-authorizing)
+
+The local `scripts/accept_requirements.py` CLI validates a frozen story,
+operator-supplied current story snapshot, frozen independent review, the exact
+review-policy JSON bytes, a separate acceptance-policy JSON, and the existing
+Forge v2 ZIP. It produces a strict `clarity-requirement-acceptance-proposal`
+with **CANDIDATE**, **NEEDS_DECISION**, or **BLOCKED** — NEVER `ACCEPTED`.
+
+```sh
+python3 scripts/accept_requirements.py \
+  --story /private/HOM-123.story.json \
+  --current-story /private/HOM-123.current.json \
+  --review /private/HOM-123.review.json \
+  --review-policy /private/review-policy.json \
+  --acceptance-policy /private/acceptance-policy.json \
+  --handoff /private/HOM-123-v2.zip \
+  --source-system linear --source-ref HOM-123 --revision 1 \
+  --output /private/HOM-123.acceptance-proposal.json
+```
+
+**Important limitations**: both story files are still supplied by the caller;
+this CLI cannot query Linear to authenticate "current", cannot verify real model
+execution or an approved policy issuer, and does not cryptographically authenticate
+the resulting JSON. A fabricated model receipt might pass syntactic scrutiny,
+but a `CANDIDATE` is still only untrusted **data for a separate supervisor**.
+The supervisor **must** re-fetch current source and independently authenticate
+review run/session and policy adoption before it can issue `ACCEPTED`.
+No client may treat a proposal as a Forge WorkOrder or implementation permission.
+
+For this initial conservative pilot, `requirement.md` in the ZIP must be the
+*exact UTF-8 text of the story's reviewed `payload`*, and each non-behavioral
+ZIP criterion text must exactly match the corresponding reviewed story criteria
+in order. Behavioral Gherkin must exactly match the reviewed `feature`. This
+deliberately rejects independently rewritten/exported text until we design and
+validate a **bound reviewed-artifact transformation contract**. The source
+revision supplied to the CLI must match the v2 handoff revision integer.
+
+The example policy remains `DRAFT` with automatic acceptance disabled; this
+yields `NEEDS_DECISION` even for syntactically clean evidence. An operator-
+provided `status: APPROVED` with `do_r_and_risk_policy_ratified: true` may
+yield `CANDIDATE` but **does not prove actual adoption**. The trusted decision
+service is intentionally deferred until we review this contract together.
+
+
 **Owner:** Clarity toolkit (quality evidence and data-only proposal); the trusted project
 acceptance supervisor / Forge City (authenticated acceptance decisions and admission).
 **Related:** `rubric/definition-of-ready.md`,
