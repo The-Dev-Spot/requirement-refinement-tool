@@ -92,8 +92,8 @@ def replay(gold, report, source_sha: str, policy_sha: str, label: str):
         flag("REVIEW_SOURCE_MISMATCH")
     if report.get("policy_file_sha256") != policy_sha:
         flag("REVIEW_POLICY_MISMATCH")
-    if report.get("pilot_with_draft_policy") is True:
-        flag("DRAFT_POLICY_PILOT")
+    if report.get("pilot_with_draft_policy") is not False:
+        flag("DRAFT_OR_UNKNOWN_POLICY_PILOT")
 
     lint = report.get("deterministic")
     run = report.get("run")
@@ -124,6 +124,12 @@ def replay(gold, report, source_sha: str, policy_sha: str, label: str):
     policy = {"adopted": True, "risk_register_status": "APPROVED"}
     agg = summarize(lint, results, policy, "claude")
     computed = agg["status"]
+    prior = run.get("aggregate")
+    if not isinstance(prior, dict) or prior.get("status") != computed or (
+        prior.get("ready_for_handover") is not False or
+        prior.get("publication_authority") is not False
+    ):
+        flag("UNTRUSTED_AGGREGATE_CLAIM")
     if problems:
         computed = "BLOCKED"
     if computed != gold["expected_aggregate"]:
