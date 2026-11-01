@@ -444,7 +444,7 @@ def summarize(lint, results, policy, backend, receipts=None):
 def review(story, policy, *, lint, provider, model=None, timeout=120, max_budget=1.0,
            fixture_dir=None, pilot_draft_policy=False, adapter=None):
     verify_inputs(story, policy)
-    results, receipts = {}, {}
+    results, receipts, failures = {}, {}, []
     rubric, rubric_sha = rubric_packet()
     if lint.get("kind") != "clarity-deterministic-quality-report":
         raise ValueError("Missing real deterministic report")
@@ -470,12 +470,17 @@ def review(story, policy, *, lint, provider, model=None, timeout=120, max_budget
             meta = {"backend": "fixture", "synthetic": True}
         else:
             prompt = prompt_for(stage, story, policy, results.get("investigator"), rubric=rubric)
-            if provider == "claude":
-                data, meta = run_claude(stage, prompt, model=model, timeout=timeout, max_budget=max_budget)
-            elif provider == "adapter":
-                data, meta = run_adapter(stage, prompt, model=model, adapter=adapter, timeout=timeout)
-            else:
-                raise ValueError("Unknown review provider")
+            try:
+                if provider == "claude":
+                    data, meta = run_claude(stage, prompt, model=model, timeout=timeout, max_budget=max_budget)
+                elif provider == "adapter":
+                    data, meta = run_adapter(stage, prompt, model=model, adapter=adapter, timeout=timeout)
+                else:
+                    raise ValueError("Unknown review provider")
+            except StageInvocationFailure as error:
+                failures.append(failure_record(error))
+                return {"results": results, "receipts": receipts, "failures": failures,
+                        "aggregate": summarize(lint, results, policy, provider, receipts=receipts)}
         results[stage] = data
         actual_prompt = prompt_for(stage, story, policy, results.get("investigator") if stage == "evaluator" else None, rubric=rubric)
         receipts[stage] = {"run_id": str(uuid.uuid4()), "input_sha256": digest(canonical(story).encode()),
@@ -490,10 +495,29 @@ def review(story, policy, *, lint, provider, model=None, timeout=120, max_budget
             if (meta.get("model_verified") is not True or
                 not isinstance(meta.get("session_id"), str) or
                 not meta["session_id"] or len(set(ids)) != len(ids)):
-                return {"results": results, "receipts": receipts,
+                failures.append({
+                    "stage": stage,
+                    "code": ("MODEL_IDENTITY_UNVERIFIED" if meta.get("model_verified") is not True
+                             else "NONINDEPENDENT_REVIEW_SESSIONS"),
+                    "message": "Model identity/session provenance could not be verified",
+                    "raw_envelope_sha256": None, "raw_envelope": None
+                })
+                return {"results": results, "receipts": receipts, "failures": failures,
                         "aggregate": summarize(lint, results, policy, provider, receipts=receipts)}
-    return {"results": results, "receipts": receipts,
+    return {"results": results, "receipts": receipts, "failures": failures,
             "aggregate": summarize(lint, results, policy, provider, receipts=receipts)}
+
+
+def write_private_report(path: Path, report: dict):
+    """Exclusive, mode-0600 local evidence. Never overwrite or upload elsewhere."""
+    path = path.absolute()
+    if path.is_symlink() or any(parent.is_symlink() for parent in path.parents):
+        raise ValueError("Symlinked report path is not permitted")
+    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as handle:
+        json.dump(report, handle, indent=2, ensure_ascii=True)
+        handle.write("\n")
 
 
 def main():
@@ -547,11 +571,7 @@ def main():
                                 max_budget=args.max_budget_usd, fixture_dir=args.fixture_dir,
                                 pilot_draft_policy=args.pilot_with_draft_policy,
                                 adapter=args.adapter_script)}
-        args.output.parent.mkdir(parents=True, exist_ok=True)
-        with args.output.open("x", encoding="utf-8") as handle:
-            os.chmod(args.output, 0o600)
-            json.dump(report, handle, indent=2)
-            handle.write("\n")
+        write_private_report(args.output, report)
         print("Review complete: " + report["run"]["aggregate"]["status"] +
               " (never authorizes tracker writes or code execution)")
         return 0 if report["run"]["aggregate"]["status"] == "REVIEWABLE_CANDIDATE" else 3
