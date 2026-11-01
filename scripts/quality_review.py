@@ -228,9 +228,16 @@ def extract_structured(raw):
 def model_matches(requested, resolved):
     if not isinstance(requested, str) or not requested.strip() or not isinstance(resolved, str) or not resolved.strip():
         return False
-    return (requested == resolved or resolved.startswith(requested + "-") or
-            (requested.lower() in ("opus", "sonnet", "haiku")
-             and requested.lower() in resolved.lower()))
+    if requested == resolved:
+        return True
+    if requested in ("opus", "sonnet", "haiku"):
+        return bool(re.fullmatch(r"claude-" + re.escape(requested) + r"-[A-Za-z0-9-]+", resolved))
+    # A canonical Claude model ID may resolve to its exact dated revision.
+    # Do not treat a different variant (e.g. gpt-6-mini for gpt-6) as the
+    # requested model just because the names share a prefix.
+    if requested.startswith("claude-"):
+        return bool(re.fullmatch(re.escape(requested) + r"-20[0-9]{6}", resolved))
+    return False
 
 
 def sanitized_env():
