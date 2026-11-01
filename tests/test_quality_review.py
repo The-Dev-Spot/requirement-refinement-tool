@@ -127,6 +127,37 @@ class ReviewContractTests(unittest.TestCase):
         self.assertEqual(agg["status"],"BLOCKED")
         self.assertIn("duplicate model session identities",agg["reasons"])
 
+    def test_unresolved_model_identity_stops_before_more_provider_calls(self):
+        calls=[]
+        def missing_model(stage, prompt, **kwargs):
+            calls.append(stage)
+            return result(stage), {
+                "backend":"provider-adapter", "session_id":"session-"+stage,
+                "model_requested":"gpt-6", "model_resolved":None,
+                "model_verified":False
+            }
+        with patch("quality_review.run_adapter",side_effect=missing_model):
+            evaluated=review(story(),policy(),lint=lint(),provider="adapter",
+                             model="gpt-6",adapter=Path("/trusted/selected.py"))
+        self.assertEqual(calls,["investigator"])
+        self.assertEqual(evaluated["aggregate"]["status"],"BLOCKED")
+        self.assertIn("evaluator not executed",evaluated["aggregate"]["reasons"])
+
+    def test_second_duplicate_session_stops_before_challenger(self):
+        calls=[]
+        def repeated(stage, prompt, **kwargs):
+            calls.append(stage)
+            return result(stage), {
+                "backend":"provider-adapter", "session_id":"PARENT-SESSION",
+                "model_requested":"gpt-6", "model_resolved":"gpt-6",
+                "model_verified":True
+            }
+        with patch("quality_review.run_adapter",side_effect=repeated):
+            evaluated=review(story(),policy(),lint=lint(),provider="adapter",
+                             model="gpt-6",adapter=Path("/trusted/selected.py"))
+        self.assertEqual(calls,["investigator","evaluator"])
+        self.assertEqual(evaluated["aggregate"]["status"],"BLOCKED")
+
     def test_challenger_receives_no_evaluator_or_investigator_verdict(self):
         source=story(); pol=policy()
         text=prompt_for("challenger",source,pol,{"verdict":"SHOULD_BE_HIDDEN"})
