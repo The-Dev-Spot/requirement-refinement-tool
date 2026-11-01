@@ -2,6 +2,85 @@
 
 **Status:** local experimental read-only runner. The deterministic L1–L10 checker and Clarity→Forge handoff are merged and CI-tested. The **three-session semantic pipeline** in `scripts/quality_review.py` runs only when explicitly invoked on a machine with an authenticated, recent Claude Code CLI. It has no Jira, Linear, Forge, production, Docker or GitHub write capability. It does not automatically declare READY.
 
+## Portable model selection and review integrity
+
+Clarity now uses a single **repository-owned D1–D10 rubric** and structured
+investigator/evaluator/blind-challenger schema. All stages receive the same
+pinned dimension definitions from `rubric/definition-of-ready.md`; each
+review records a rubric SHA256 and the exact prompt digest, plus requested
+and provider-reported model IDs and per-stage process/session receipts.
+
+The quality and acceptance thresholds are **model-independent**: no
+incomplete D1–D10, unresolved material finding, unchecked rubric revision,
+unknown model, duplicated session or source/policy mismatch can produce a
+reviewable candidate. This is a reproducibility **contract**, not proof
+that two models have equal semantic accuracy. Actual candidate quality is
+measured against independently approved gold cases.
+
+- `--provider claude --model claude-opus-5-5` uses the unmodified Claude Code
+  CLI. The runner clears inherited Claude Code parent-session environment
+  fields, asks for a concrete model, and checks that the CLI's returned model
+  (or a single-model `modelUsage` entry) matches. If no resolved model ID is
+  returned, the result is **BLOCKED / MODEL NOT VERIFIED**, never silently
+  called Opus just because the surrounding chat was Opus.
+- `--provider adapter --adapter-script /trusted/review_adapter.py --model gpt-6`
+  uses an **operator-selected**, absolute Python adapter script. It can call
+  OpenAI, another approved hosted API, or a local model. Neither n8n issue
+  content nor model output may choose the adapter path, model permissions or
+  credentials. Adapter configuration is private and executed outside Clarity.
+  A new model needs an actual provider adapter and authorized credentials;
+  installing Clarity alone does not grant model access.
+
+**Adapter stdin protocol** (one JSON object):
+
+```json
+{
+  "protocol_version": 1,
+  "stage": "evaluator",
+  "model_requested": "gpt-6",
+  "prompt": "<entire authoritative instructions + rubric + story>",
+  "output_schema": {"type": "object"}
+}
+```
+
+The `output_schema` shown here is abbreviated; the real object is
+`quality_review.OUTPUT_SCHEMA`. Adapter writes **one JSON object** to stdout:
+
+```json
+{
+  "is_error": false,
+  "structured_output": {
+    "stage": "evaluator",
+    "verdict": "PASS",
+    "dimensions": [],
+    "findings": [],
+    "questions": [],
+    "summary": "<real evidenced result>"
+  },
+  "model": "gpt-6",
+  "session_id": "<unique provider-generated session ID>",
+  "usage": {}
+}
+```
+
+The illustrative `dimensions: []` above is **not a valid actual evaluator**
+result: it must contain *all ten* evidenced D1–D10 records. Likewise,
+investigator/challenger dimensions must be empty. The adapter must return the
+real resolved model ID and an independently generated session identifier,
+not simply echo an arbitrary requested model or a parent chat ID.
+
+Adapter access is a powerful trusted-host capability. The CLI calls the
+configured Python program with argv arguments **containing no prompts or
+issue text**, passing the full request through stdin and disabling inherited
+Claude session flags. The adapter itself is responsible for safe network
+configuration, encrypted secrets, provider quotas, output size and honest
+model/session provenance; a trusted Forge City supervisor must eventually
+authenticate the provider's claims. Do not run an adapter supplied in a ticket.
+
+**Repeat pilot requirement:** Node.js **24+** is enforced by the CLI before
+running mechanical L1–L10, and `--model` must be explicitly set for live
+reviews. CI tests use synthetic responses and never call paid models.
+
 ## What runs
 
 1. Node-based L1–L10 preflight using Clarity's pinned Cucumber parser, optional operator-selected approved risk register, and stable input hash. A mechanical FAIL/BLOCKED or missing approved policy **stops before model usage**.
@@ -67,7 +146,7 @@ python3 scripts/quality_review.py \
   --input /private/forge-city/HOM-1972.snapshot.json \
   --policy /private/forge-city/project-policy-draft.json \
   --output /private/forge-city/HOM-1972.draft-pilot.json \
-  --provider claude --model sonnet --pilot-with-draft-policy
+  --provider claude --model claude-opus-5-5 --pilot-with-draft-policy
 ```
 
 Use `adopted: false`, `risk_register_status: DRAFT`, and the source-
