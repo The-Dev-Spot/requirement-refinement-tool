@@ -1,7 +1,5 @@
 """Synthetic question-export contract tests. No Slack, API or paid models."""
-import copy
 import json
-import os
 from pathlib import Path
 import stat
 import subprocess
@@ -44,7 +42,7 @@ class QuestionExportTests(unittest.TestCase):
         self.assertFalse(event["forge_dispatch_authority"])
         self.assertTrue(event["needs_trusted_source_binding"])
         source = next(q for q in batch["questions"] if "source" in q["question"])
-        self.assertEqual(source["proposed_by"], ["investigator", "challenger"])
+        self.assertEqual(source["proposed_by"], ["investigator", "evaluator", "challenger"])
         for word in ("authoritative?", "provider-session-", "raw_envelope", "model_usage", "login"):
             self.assertNotIn(word, json.dumps(event))
         self.assertEqual(event["event_id"], extract_proposals(report())[1]["event_id"])
