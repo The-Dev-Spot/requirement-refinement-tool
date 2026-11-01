@@ -75,6 +75,16 @@ class QuestionExportTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "validated model"):
             extract_proposals(r)
 
+    def test_duplicate_sessions_and_fabricated_candidate_are_rejected(self):
+        r = report()
+        r["run"]["receipts"]["challenger"]["session_id"] = "provider-session-0"
+        with self.assertRaisesRegex(ValueError, "Duplicate reviewer session"):
+            extract_proposals(r)
+        r = report()
+        r["run"]["aggregate"]["status"] = "REVIEWABLE_CANDIDATE"
+        with self.assertRaisesRegex(ValueError, "unresolved questions"):
+            extract_proposals(r)
+
     def test_malformed_hash_question_or_stage_rejected(self):
         r = report()
         r["input_file_sha256"] = "NOT-A-SHA"
