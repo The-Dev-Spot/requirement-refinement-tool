@@ -9,6 +9,7 @@ adoption and trusted Forge City handoff remain separate human/system decisions.
 from __future__ import annotations
 
 import argparse
+import copy
 import hashlib
 import json
 import os
@@ -23,7 +24,13 @@ import uuid
 STAGES = ("investigator", "evaluator", "challenger")
 RUBRIC_FILE = Path(__file__).resolve().parents[1] / "rubric/definition-of-ready.md"
 INHERITED_SESSION_ENV = ("CLAUDE_CODE_SESSION_ID", "CLAUDECODE", "CLAUDE_CODE_CHILD_SESSION",
-                         "CLAUDE_CODE_PARENT_SESSION_ID", "CLAUDE_CODE_FORCE_SESSION_PERSISTENCE")
+                         "CLAUDE_CODE_PARENT_SESSION_ID", "CLAUDE_CODE_FORCE_SESSION_PERSISTENCE",
+                         "CLAUDE_CODE_REMOTE_SESSION_ID", "CLAUDE_CODE_SESSION_ORIGIN",
+                         "CLAUDE_CODE_SESSION_ATTENDED", "CLAUDE_SESSION_INGRESS_TOKEN_FILE",
+                         "SESSION_INGRESS_URL", "TRACEPARENT",
+                         "CLAUDE_CODE_MESSAGING_TOKEN", "CLAUDE_CODE_MESSAGING_SOCKET")
+HOSTED_SESSION_INDICATORS = ("CLAUDE_CODE_REMOTE_SESSION_ID",
+                             "CLAUDE_SESSION_INGRESS_TOKEN_FILE", "SESSION_INGRESS_URL")
 
 DIMS = tuple(f"D{i}" for i in range(1, 11))
 ALLOWED = {"PASS", "WARN", "FAIL", "NOT_RUN"}
@@ -60,6 +67,49 @@ OUTPUT_SCHEMA = {
         "summary": {"type": "string"}
     }, "required": ["stage", "verdict", "dimensions", "findings", "questions", "summary"]
 }
+
+
+def output_schema_for(stage):
+    """Use the same invariant result fields, with *stage-specific* constraints.
+
+    LLM structured output must never encourage an investigator/challenger to
+    emit D1-D10. The host still validates every field after inference.
+    """
+    if stage not in STAGES:
+        raise ValueError("Unknown review stage")
+    schema = copy.deepcopy(OUTPUT_SCHEMA)
+    schema["properties"]["stage"]["enum"] = [stage]
+    dimensions = schema["properties"]["dimensions"]
+    if stage == "evaluator":
+        dimensions["minItems"] = 10
+        dimensions["maxItems"] = 10
+    else:
+        dimensions["maxItems"] = 0
+    return schema
+
+
+class StageInvocationFailure(ValueError):
+    """Bounded evidence of an unsuccessful provider stage, never an approval."""
+    def __init__(self, stage, code, message, raw_envelope=None):
+        super().__init__(message)
+        self.stage, self.code = stage, code
+        # Raw model output can contain customer details. Store only in the
+        # operator-local private report, never a public CI artifact.
+        self.raw_envelope = raw_envelope
+
+
+def is_hosted_session():
+    # In a managed session container, stripping a few variables cannot prove
+    # that a nested Claude CLI owns its own auth or independent session.
+    return any(os.environ.get(name) for name in HOSTED_SESSION_INDICATORS)
+
+
+def failure_record(error):
+    raw = error.raw_envelope
+    return {"stage": error.stage, "code": error.code,
+            "message": str(error)[:500],
+            "raw_envelope_sha256": digest(raw.encode("utf-8")) if raw is not None else None,
+            "raw_envelope": raw}
 
 
 def canonical(obj):
@@ -189,13 +239,16 @@ def prompt_for(stage, story, policy, investigation=None, rubric=None):
     if not rubric or "D4 | Testable & precise" not in rubric:
         raise ValueError("Missing authoritative dimension definitions")
     if stage == "investigator":
-        task = "Determine story intent, provenance, dependencies, project-authority conflicts, hidden decisions and unresolved questions. Return findings, no D scores."
+        task = ("Determine story intent, provenance, dependencies, project-authority conflicts, hidden decisions "
+                "and unresolved questions. Return findings and questions. The dimensions field MUST be [] "
+                "because only the evaluator scores D1-D10.")
     elif stage == "evaluator":
         task = "Score D1-D10 for the exact story using project policy and investigator's evidence. Hard failures and relevant risk escalation must be explained. Return all D scores."
     else:
         task = ("Fresh independent cold-read CHALLENGE. Do NOT rely on first evaluator's verdict or investigator's summary. "
                 "Seek a counterexample: conflicting decisions, unsupported assumptions, hidden context, missing negative outcomes, "
-                "data/interface contract gaps, test-oracle holes. Return findings and verdict, NOT D scores.")
+                "data/interface contract gaps, test-oracle holes. Return findings and verdict, "
+                "and dimensions MUST be [] because only the evaluator scores D1-D10.")
     data = {"original_story": story, "project_policy_snapshot": policy}
     if stage == "evaluator":
         data["investigator_evidence"] = investigation
@@ -255,10 +308,15 @@ def run_claude(stage, prompt, *, model, timeout, max_budget):
                "--disallowedTools", "mcp__*", "--permission-mode", "dontAsk",
                "--no-session-persistence", "--max-turns", "1",
                "--max-budget-usd", str(max_budget), "--output-format", "json",
-               "--json-schema", canonical(OUTPUT_SCHEMA)]
+               "--json-schema", canonical(output_schema_for(stage))]
     if model:
         command.extend(["--model", model])
     command.append("Review the complete requirements packet supplied on stdin, and return the requested JSON.")
+    # Fail before spending tokens in a managed host session. The observed
+    # hosted claude.ai session reused the orchestrator's session identity.
+    if is_hosted_session():
+        raise StageInvocationFailure(stage, "HOSTED_SESSION_NOT_ISOLATED",
+                                     "Hosted Claude session cannot prove an independent child session; use a separately authenticated trusted host")
     # Deliberately provide source material only on stdin; never put customer
     # details in process argv or shell history.
     started = time.monotonic()
@@ -266,8 +324,16 @@ def run_claude(stage, prompt, *, model, timeout, max_budget):
                               timeout=timeout, check=False, cwd=tempfile.gettempdir(),
                               env=sanitized_env())
     if response.returncode or len(response.stdout) > MAX_OUTPUT:
-        raise ValueError("Model invocation failed or exceeded result size")
-    data, meta = extract_structured(response.stdout)
+        raise StageInvocationFailure(stage, "MODEL_COMMAND_FAILED",
+                                     "Model command failed or output exceeded safety limit",
+                                     response.stdout[:MAX_OUTPUT])
+    try:
+        data, meta = extract_structured(response.stdout)
+        check_stage(stage, data)
+    except (ValueError, KeyError, TypeError) as exc:
+        raise StageInvocationFailure(stage, "MODEL_STAGE_SCHEMA_INVALID",
+                                     "Provider returned invalid structured stage output: " + str(exc),
+                                     response.stdout) from exc
     resolved = meta.get("model")
     models_used = meta.get("model_usage_models") or []
     verified = (model_matches(model, resolved) and
@@ -291,15 +357,23 @@ def run_adapter(stage, prompt, *, model, adapter, timeout):
     if adapter is None or not adapter.is_absolute() or adapter.suffix != ".py" or adapter.is_symlink() or not adapter.is_file():
         raise ValueError("A trusted absolute regular .py adapter file is required")
     request = {"protocol_version": 1, "stage": stage, "model_requested": model,
-               "prompt": prompt, "output_schema": OUTPUT_SCHEMA}
+               "prompt": prompt, "output_schema": output_schema_for(stage)}
     started = time.monotonic()
     response = subprocess.run([sys.executable, str(adapter)], input=canonical(request),
                               text=True, capture_output=True, check=False,
                               timeout=timeout, cwd=tempfile.gettempdir(),
                               env=sanitized_env())
     if response.returncode or len(response.stdout) > MAX_OUTPUT:
-        raise ValueError("Adapter failed or returned an oversized result")
-    data, meta = extract_structured(response.stdout)
+        raise StageInvocationFailure(stage, "ADAPTER_COMMAND_FAILED",
+                                     "Provider adapter failed or exceeded safety limit",
+                                     response.stdout[:MAX_OUTPUT])
+    try:
+        data, meta = extract_structured(response.stdout)
+        check_stage(stage, data)
+    except (ValueError, KeyError, TypeError) as exc:
+        raise StageInvocationFailure(stage, "MODEL_STAGE_SCHEMA_INVALID",
+                                     "Provider adapter returned invalid stage output: " + str(exc),
+                                     response.stdout) from exc
     resolved = meta.get("model")
     return check_stage(stage, data), {"backend": "provider-adapter",
                                       "elapsed_s": round(time.monotonic() - started, 2),
