@@ -63,6 +63,16 @@ def validate_evidence_packet(packet, story, policy):
         raise ValueError("Evidence packet must contain 1..30 source excerpts")
     if len(canonical(packet).encode()) > 90_000:
         raise ValueError("Evidence packet exceeds safe review size")
+    repositories = policy.get("evidence_allowed_repositories")
+    workspace = policy.get("evidence_linear_workspace")
+    if (not isinstance(repositories, list) or len(repositories) > 15
+            or any(not isinstance(r, str)
+                   or not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", r)
+                   for r in repositories)
+            or len(set(repositories)) != len(repositories)):
+        raise ValueError("Evidence repository allowlist must be explicit")
+    if not isinstance(workspace, str) or not re.fullmatch(r"[A-Za-z0-9_-]+", workspace):
+        raise ValueError("Evidence Linear workspace allowlist must be explicit")
     seen = set()
     for source in sources:
         if not isinstance(source, dict) or set(source) != SOURCE_KEYS:
@@ -105,6 +115,8 @@ def validate_evidence_packet(packet, story, policy):
             if (len(bits) < 5 or bits[2] != "blob" or bits[3] != revision
                     or not all(re.fullmatch(r"[A-Za-z0-9._-]+", b) for b in bits)):
                 raise ValueError("GitHub evidence URL is not a commit-pinned file")
+            if bits[0] + "/" + bits[1] not in repositories:
+                raise ValueError("GitHub repository not on trusted allowlist")
             if parsed.fragment and not re.fullmatch(r"L[0-9]+(?:-L[0-9]+)?", parsed.fragment):
                 raise ValueError("Invalid GitHub line citation")
             if kind not in ("CODE", "TEST", "DOCUMENT"):
@@ -112,6 +124,8 @@ def validate_evidence_packet(packet, story, policy):
             if authority not in ("IMPLEMENTATION", "UNVERIFIED", "HISTORICAL"):
                 raise ValueError("GitHub content cannot ratify policy")
         else:
+            if parsed.path.strip("/").split("/")[0] != workspace:
+                raise ValueError("Linear workspace not on trusted allowlist")
             if parsed.hostname != "linear.app" or parsed.fragment:
                 raise ValueError("Linear evidence requires a clean issue/document URL")
             if not re.fullmatch(r"/[^/]+/(?:issue|document)/[A-Za-z0-9_-]+(?:/[A-Za-z0-9_-]+)?", parsed.path):
