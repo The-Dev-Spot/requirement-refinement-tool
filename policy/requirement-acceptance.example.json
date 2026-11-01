@@ -51,5 +51,7 @@
       "NO_AUTHENTICATED_APPROVAL_POLICY"
     ],
     "verified_owner_required": true
-  }
+  },
+  "id": "synthetic-acceptance-policy",
+  "revision": "draft-1"
 }
