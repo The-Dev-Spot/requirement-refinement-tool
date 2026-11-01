@@ -16,6 +16,7 @@ import zipfile
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 from accept_requirements import assess, canonical, sha
 from export_forge_handoff import package
+from quality_review import prompt_for, rubric_packet
 
 
 def base():
@@ -69,7 +70,24 @@ def base():
                 for i,name in enumerate(names)}
         }
     }
+    rubric, rubric_sha = rubric_packet()
+    review["rubric_file_sha256"] = rubric_sha
+    for name in names:
+        rec = review["run"]["receipts"][name]
+        rec.update({
+            "rubric_sha256": rubric_sha,
+            "model_requested": "claude-opus-5-5",
+            "model_resolved": "claude-opus-5-5",
+            "model_verified": True,
+            "prompt_sha256": sha(prompt_for(
+                name, story, review_policy,
+                review["run"]["results"]["investigator"] if name == "evaluator" else None,
+                rubric=rubric).encode("utf-8"))
+        })
+    canon = b"Canonical synthetic Linear description for original revision."
     return {"story_data":s, "current_data":s,
+            "canonical_source_data":canon, "current_canonical_data":canon,
+            "tracker_revision":"2026-11-01T08:01:00Z",
             "review_data":json.dumps(review).encode(), "review_policy_data":pol,
             "acceptance_policy_data":a, "zip_data":archive,
             "system":"linear", "ref":"SYN-1","revision":"1"}
@@ -90,6 +108,9 @@ class AcceptanceProposalTests(unittest.TestCase):
         self.assertNotIn("ACCEPTED",json.dumps(proposed))
         self.assertEqual(proposed["source"]["content_sha256"],sha(base()["story_data"]))
         self.assertEqual(proposed["handoff_sha256"],sha(base()["zip_data"]))
+        self.assertEqual(proposed["source"]["canonical_content_sha256"],
+                         sha(base()["canonical_source_data"]))
+        self.assertEqual(proposed["source"]["tracker_revision"],"2026-11-01T08:01:00Z")
 
     def test_draft_policy_needs_real_decision(self):
         data=base()
@@ -114,6 +135,32 @@ class AcceptanceProposalTests(unittest.TestCase):
         data["current_data"]=data["story_data"]+b" "
         self.assertIn("FROZEN_SOURCE_DIFFERS_FROM_SUPPLIED_CURRENT_SNAPSHOT",
                       assess(**data)["reasons"])
+
+    def test_original_tracker_description_changed_blocks(self):
+        data=base()
+        data["current_canonical_data"] = data["canonical_source_data"] + b" "
+        self.assertIn("CANONICAL_TRACKER_SOURCE_CHANGED", assess(**data)["reasons"])
+
+    def test_rubric_rewrite_or_missing_receipt_blocks(self):
+        data=base()
+        mutate_json(data,"review_data",lambda x:x.update(rubric_file_sha256="0"*64))
+        self.assertIn("REVIEW_RUBRIC_DIGEST_MISMATCH",assess(**data)["reasons"])
+        data=base()
+        mutate_json(data,"review_data",lambda x:x["run"]["receipts"]["challenger"].update(
+            rubric_sha256="0"*64))
+        self.assertIn("REVIEW_RUBRIC_DIGEST_MISMATCH",assess(**data)["reasons"])
+
+    def test_different_or_unverified_model_denied(self):
+        data=base()
+        mutate_json(data,"review_data",lambda x:x["run"]["receipts"]["evaluator"].update(
+            model_resolved="claude-sonnet-4",model_verified=False))
+        self.assertIn("MODEL_IDENTITY_UNVERIFIED",assess(**data)["reasons"])
+
+    def test_prompt_without_full_dimensions_denied(self):
+        data=base()
+        mutate_json(data,"review_data",lambda x:x["run"]["receipts"]["challenger"].update(
+            prompt_sha256="0"*64))
+        self.assertIn("REVIEW_PROMPT_DIGEST_MISMATCH",assess(**data)["reasons"])
 
     def test_review_source_hash_tamper_blocks(self):
         data=base()
@@ -215,6 +262,8 @@ class AcceptanceProposalTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp)
             flags={"story":sample["story_data"],"current-story":sample["current_data"],
+                   "canonical-source":sample["canonical_source_data"],
+                   "current-canonical":sample["current_canonical_data"],
                    "review":sample["review_data"],
                    "review-policy":sample["review_policy_data"],
                    "acceptance-policy":sample["acceptance_policy_data"],
@@ -227,7 +276,8 @@ class AcceptanceProposalTests(unittest.TestCase):
                 cmd.extend(["--"+key,str(path)])
             out=root/"proposal.json"
             cmd.extend(["--source-system","linear","--source-ref","SYN-1",
-                        "--revision","1","--output",str(out)])
+                        "--revision","1","--tracker-revision",
+                        sample["tracker_revision"],"--output",str(out)])
             p=subprocess.run(cmd,capture_output=True,text=True)
             self.assertEqual(p.returncode,3,p.stderr)
             content=json.loads(out.read_text())

@@ -15,13 +15,32 @@ with **CANDIDATE**, **NEEDS_DECISION**, or **BLOCKED** — NEVER `ACCEPTED`.
 python3 scripts/accept_requirements.py \
   --story /private/HOM-123.story.json \
   --current-story /private/HOM-123.current.json \
+  --canonical-source /private/HOM-123.original-issue-description.md \
+  --current-canonical /private/HOM-123.current-issue-description.md \
   --review /private/HOM-123.review.json \
   --review-policy /private/review-policy.json \
   --acceptance-policy /private/acceptance-policy.json \
   --handoff /private/HOM-123-v2.zip \
   --source-system linear --source-ref HOM-123 --revision 1 \
+  --tracker-revision 2026-11-01T07:15:35.085Z \
   --output /private/HOM-123.acceptance-proposal.json
 ```
+
+**Provenance semantics:** `source.content_sha256` binds the **reviewed
+story JSON**. `source.canonical_content_sha256` separately binds the
+**original UTF-8 tracker issue description**. `source.tracker_revision`
+carries its tracker revision/updatedAt, distinct from the Forge v2 handoff's
+integer `revision`. Both source snapshots must match locally. This is still
+*caller-supplied evidence*; only the later authenticated tracker adapter can
+prove current revision and issue ownership. Existing v2 ZIP format is unchanged.
+
+The acceptance validator now re-derives the authoritatively versioned
+D1–D10 rubric SHA from `rubric/definition-of-ready.md`; it rejects
+review reports missing that hash, model-reported identity, distinct stage
+sessions or a matching exact prompt digest. These receipt fields are
+structural crosschecks, **not** signatures or source truth. The same
+validation applies to Claude Code and operator-configured external model
+adapters. See [model adapter protocol](independent-quality-review-pilot.md).
 
 **Important limitations**: both story files are still supplied by the caller;
 this CLI cannot query Linear to authenticate "current", cannot verify real model

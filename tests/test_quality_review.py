@@ -10,8 +10,8 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 from quality_review import (
-    DIMS, check_stage, digest, prompt_for, review, run_claude,
-    summarize, verify_inputs
+    DIMS, check_stage, digest, prompt_for, review, run_claude, run_adapter,
+    model_matches, rubric_packet, sanitized_env, summarize, verify_inputs
 )
 
 
@@ -53,6 +53,110 @@ class ReviewContractTests(unittest.TestCase):
         verify_inputs(story(),policy())
         bad=policy();bad["decisions"]=[{"id":"A", "text":"Unversioned decision"}]
         with self.assertRaises(ValueError):verify_inputs(story(),bad)
+
+    def test_authoritative_rubric_definitions_are_in_all_stage_prompts(self):
+        raw, sha=rubric_packet()
+        self.assertIn("D4 | Testable & precise",raw)
+        self.assertEqual(len(sha),64)
+        for stage in ("investigator","evaluator","challenger"):
+            prompt=prompt_for(stage,story(),policy())
+            self.assertIn("D4 | Testable & precise",prompt)
+            self.assertIn("D6 | Provenance",prompt)
+            self.assertIn("REPOSITORY-OWNED RUBRIC",prompt)
+
+    def test_host_session_environment_is_removed(self):
+        with patch.dict("quality_review.os.environ", {
+            "CLAUDE_CODE_SESSION_ID":"PARENT-123", "CLAUDECODE":"1",
+            "CLAUDE_CODE_CHILD_SESSION":"1", "CLAUDE_CODE_FORCE_SESSION_PERSISTENCE":"1",
+            "PRESERVED_APP_CONFIG":"yes"}, clear=False):
+            env=sanitized_env()
+        for k in ("CLAUDE_CODE_SESSION_ID","CLAUDECODE",
+                  "CLAUDE_CODE_CHILD_SESSION","CLAUDE_CODE_FORCE_SESSION_PERSISTENCE"):
+            self.assertNotIn(k,env)
+        self.assertEqual(env["PRESERVED_APP_CONFIG"],"yes")
+
+    def test_requested_model_must_match_provider_reported_model(self):
+        self.assertTrue(model_matches("claude-opus-5-5","claude-opus-5-5"))
+        self.assertTrue(model_matches("opus","claude-opus-5-5"))
+        self.assertTrue(model_matches("gpt-6","gpt-6"))
+        self.assertFalse(model_matches("claude-opus-5-5","claude-sonnet-4-6"))
+        self.assertFalse(model_matches("gpt-6","gpt-6-mini"))
+        self.assertFalse(model_matches("claude-opus-5-5","claude-opus-5-5-mini"))
+        self.assertTrue(model_matches("claude-opus-5-5","claude-opus-5-5-20261101"))
+        self.assertFalse(model_matches("gpt-6",None))
+
+    def test_adapter_uses_same_schema_and_requires_reported_model(self):
+        envelope={"is_error":False,"structured_output":result("investigator"),
+                  "session_id":"ADAPTER-1","model":"gpt-6"}
+        seen={}
+        def fake(args,**kwargs):
+            seen["args"]=args
+            seen["request"]=json.loads(kwargs["input"])
+            seen["env"]=kwargs["env"]
+            return subprocess.CompletedProcess(args,0,json.dumps(envelope),"")
+        with tempfile.TemporaryDirectory() as folder:
+            adapter=Path(folder)/"approved.py"
+            adapter.write_text("# placeholder for mocked authorized adapter\n")
+            with patch("quality_review.subprocess.run",side_effect=fake):
+                r,meta=run_adapter("investigator","SENSITIVE",model="gpt-6",
+                                   adapter=adapter,timeout=15)
+        self.assertEqual(r["stage"],"investigator")
+        self.assertEqual(meta["backend"],"provider-adapter")
+        self.assertTrue(meta["model_verified"])
+        self.assertEqual(seen["request"]["stage"],"investigator")
+        self.assertEqual(seen["request"]["model_requested"],"gpt-6")
+        self.assertNotIn("SENSITIVE"," ".join(seen["args"]))
+
+    def test_clean_review_with_unknown_model_identity_is_blocked(self):
+        results={s:result(s) for s in ("investigator","evaluator","challenger")}
+        rub_sha=rubric_packet()[1]
+        receipts={
+            s:{"rubric_sha256":rub_sha, "model_verified":False,
+               "session_id":"distinct-"+s} for s in results
+        }
+        agg=summarize(lint(),results,policy(),"adapter",receipts=receipts)
+        self.assertEqual(agg["status"],"BLOCKED")
+        self.assertTrue(any("model not verified" in x for x in agg["reasons"]))
+
+    def test_clean_review_with_inherited_duplicate_session_is_blocked(self):
+        results={s:result(s) for s in ("investigator","evaluator","challenger")}
+        rub_sha=rubric_packet()[1]
+        receipts={s:{"rubric_sha256":rub_sha,"model_verified":True,
+                     "session_id":"host-session"} for s in results}
+        agg=summarize(lint(),results,policy(),"claude",receipts=receipts)
+        self.assertEqual(agg["status"],"BLOCKED")
+        self.assertIn("duplicate model session identities",agg["reasons"])
+
+    def test_unresolved_model_identity_stops_before_more_provider_calls(self):
+        calls=[]
+        def missing_model(stage, prompt, **kwargs):
+            calls.append(stage)
+            return result(stage), {
+                "backend":"provider-adapter", "session_id":"session-"+stage,
+                "model_requested":"gpt-6", "model_resolved":None,
+                "model_verified":False
+            }
+        with patch("quality_review.run_adapter",side_effect=missing_model):
+            evaluated=review(story(),policy(),lint=lint(),provider="adapter",
+                             model="gpt-6",adapter=Path("/trusted/selected.py"))
+        self.assertEqual(calls,["investigator"])
+        self.assertEqual(evaluated["aggregate"]["status"],"BLOCKED")
+        self.assertIn("evaluator not executed",evaluated["aggregate"]["reasons"])
+
+    def test_second_duplicate_session_stops_before_challenger(self):
+        calls=[]
+        def repeated(stage, prompt, **kwargs):
+            calls.append(stage)
+            return result(stage), {
+                "backend":"provider-adapter", "session_id":"PARENT-SESSION",
+                "model_requested":"gpt-6", "model_resolved":"gpt-6",
+                "model_verified":True
+            }
+        with patch("quality_review.run_adapter",side_effect=repeated):
+            evaluated=review(story(),policy(),lint=lint(),provider="adapter",
+                             model="gpt-6",adapter=Path("/trusted/selected.py"))
+        self.assertEqual(calls,["investigator","evaluator"])
+        self.assertEqual(evaluated["aggregate"]["status"],"BLOCKED")
 
     def test_challenger_receives_no_evaluator_or_investigator_verdict(self):
         source=story(); pol=policy()
@@ -176,6 +280,7 @@ class ReviewContractTests(unittest.TestCase):
         self.assertIn("--disallowedTools",seen["args"])
         self.assertNotIn("PRIVATE SENTENCE"," ".join(seen["args"]))
         self.assertEqual(seen["kwargs"]["input"],"PRIVATE SENTENCE")
+        self.assertNotIn("CLAUDE_CODE_SESSION_ID",seen["kwargs"]["env"])
         self.assertFalse(seen["kwargs"]["shell"] if "shell" in seen["kwargs"] else False)
 
     def test_cli_fixtures_end_to_end_never_grant_ready(self):

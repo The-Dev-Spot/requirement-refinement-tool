@@ -13,6 +13,7 @@ import unittest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from benchmark_review_consistency import compare, digest
+from quality_review import rubric_packet
 from accept_requirements import canonical
 from test_acceptance_proposal import base
 
@@ -24,6 +25,7 @@ def positive_case():
         "schema_version":1,"case_id":"FORGE-DEMO-SYNTHETIC",
         "source_sha256":digest(data["story_data"]),
         "policy_sha256":digest(data["review_policy_data"]),
+        "rubric_sha256":rubric_packet()[1],
         "expected_aggregate":"REVIEWABLE_CANDIDATE",
         "required_findings":[],
         "source_anchors":[story["title"],story["payload"]]
@@ -73,6 +75,7 @@ def contradiction_case():
         "schema_version":1,"case_id":"M0-CAPACITY-SYNTHETIC",
         "source_sha256":digest(s),
         "policy_sha256":digest(data["review_policy_data"]),
+        "rubric_sha256":rubric_packet()[1],
         "expected_aggregate":"BLOCKED",
         "source_anchors":["four worker slots, Clarity and Forge",
                           "at most two total worker containers",
@@ -153,6 +156,26 @@ class ModelNeutralBenchmarks(unittest.TestCase):
         r=compare(c,s,p,{"reviewer_a":a,"reviewer_b":b})
         self.assertEqual(r["benchmark_result"],"FAIL")
         self.assertIn("INVALID_STAGE_EVALUATOR",r["reviews"][0]["problems"])
+
+    def test_different_rubric_revision_rejected_before_comparison(self):
+        c,s,p,a,b=positive_case()
+        c["rubric_sha256"]="0"*64
+        with self.assertRaisesRegex(ValueError,"rubric differs"):
+            compare(c,s,p,{"reviewer_a":a,"reviewer_b":b})
+
+    def test_report_missing_rubric_denied(self):
+        c,s,p,a,b=positive_case()
+        b.pop("rubric_file_sha256")
+        r=compare(c,s,p,{"reviewer_a":a,"reviewer_b":b})
+        self.assertEqual(r["benchmark_result"],"FAIL")
+        self.assertIn("REVIEW_RUBRIC_MISMATCH",r["reviews"][1]["problems"])
+
+    def test_report_claims_wrong_resolved_model_denied(self):
+        c,s,p,a,b=positive_case()
+        b["run"]["receipts"]["evaluator"]["model_resolved"]="claude-sonnet-4-6"
+        r=compare(c,s,p,{"reviewer_a":a,"reviewer_b":b})
+        self.assertEqual(r["benchmark_result"],"FAIL")
+        self.assertIn("MODEL_NOT_VERIFIED_EVALUATOR",r["reviews"][1]["problems"])
 
     def test_missing_challenger_fails(self):
         c,s,p,a,b=positive_case()

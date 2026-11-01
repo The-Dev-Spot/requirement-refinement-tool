@@ -66,14 +66,20 @@ python3 scripts/benchmark_review_consistency.py \
 
 `gold.json` format:
 - `schema_version: 1`, `case_id`;
-- raw file `source_sha256`, `policy_sha256`;
+- raw file `source_sha256`, `policy_sha256`, and
+  `rubric_sha256` for the **complete authoritative version** of
+  `rubric/definition-of-ready.md`;
 - `expected_aggregate`: `BLOCKED` or `REVIEWABLE_CANDIDATE`;
 - `source_anchors`: precise substrings that must occur in the frozen source;
 - `required_findings`: each has `id`, short audited regex `aliases`, and
   `required_stages` drawn from investigator/evaluator/challenger.
 
 The scorer **recomputes** reviewer stages with Clarity's
-`quality_review.check_stage` and `summarize`. It never trusts an agent's
+`quality_review.check_stage` and `summarize`.
+It also requires a matching rubric digest in both the report and every
+stage receipt, distinct session IDs and requested/resolved model consistency.
+Model IDs remain provider-reported rather than independently attested; this
+benchmark detects missing/mismatched claims, not maliciously forged identities. It never trusts an agent's
 reported top-level aggregate, claimed READY or later version of the source.
 It fails when either result misses a gold-standard blocker or when their
 computed outcomes differ. A difference in narrative phrasing alone should not

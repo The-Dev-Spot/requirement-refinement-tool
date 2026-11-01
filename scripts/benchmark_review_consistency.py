@@ -14,7 +14,7 @@ from pathlib import Path
 import re
 import sys
 
-from quality_review import STAGES, check_stage, summarize
+from quality_review import STAGES, check_stage, summarize, rubric_packet, model_matches
 
 MAX_SOURCE = 300_000
 
@@ -41,7 +41,7 @@ def parse(path: Path):
 def validate_gold(gold, source: str, source_sha: str, policy_sha: str):
     if not isinstance(gold, dict) or set(gold) != {
         "schema_version", "case_id", "source_sha256", "policy_sha256",
-        "expected_aggregate", "required_findings", "source_anchors"
+        "expected_aggregate", "required_findings", "source_anchors", "rubric_sha256"
     }:
         raise ValueError("Invalid or incomplete gold-case fields")
     if type(gold["schema_version"]) is not int or gold["schema_version"] != 1:
@@ -50,6 +50,8 @@ def validate_gold(gold, source: str, source_sha: str, policy_sha: str):
         raise ValueError("Missing benchmark case ID")
     if gold["source_sha256"] != source_sha or gold["policy_sha256"] != policy_sha:
         raise ValueError("Gold case is not bound to exact source and policy bytes")
+    if gold["rubric_sha256"] != rubric_packet()[1]:
+        raise ValueError("Gold case rubric differs from authoritative repo version")
     if gold["expected_aggregate"] not in ("BLOCKED", "REVIEWABLE_CANDIDATE"):
         raise ValueError("Invalid expected outcome")
     if not isinstance(gold["source_anchors"], list) or not gold["source_anchors"]:
@@ -92,6 +94,8 @@ def replay(gold, report, source_sha: str, policy_sha: str, label: str, policy: d
         flag("REVIEW_SOURCE_MISMATCH")
     if report.get("policy_file_sha256") != policy_sha:
         flag("REVIEW_POLICY_MISMATCH")
+    if report.get("rubric_file_sha256") != gold["rubric_sha256"]:
+        flag("REVIEW_RUBRIC_MISMATCH")
     if report.get("pilot_with_draft_policy") is not False:
         flag("DRAFT_OR_UNKNOWN_POLICY_PILOT")
 
@@ -107,6 +111,27 @@ def replay(gold, report, source_sha: str, policy_sha: str, label: str, policy: d
         flag("INCOMPLETE_REVIEW_STAGES")
         return {"label": label, "benchmark_pass": False,
                 "recomputed_aggregate": "BLOCKED", "problems": problems}
+    receipts = run.get("receipts")
+    if not isinstance(receipts, dict) or set(receipts) != set(STAGES):
+        flag("INCOMPLETE_REVIEW_RECEIPTS")
+        return {"label": label, "benchmark_pass": False,
+                "recomputed_aggregate": "BLOCKED", "problems": problems}
+    sessions = []
+    for stage in STAGES:
+        receipt = receipts[stage]
+        if not isinstance(receipt, dict) or receipt.get("rubric_sha256") != gold["rubric_sha256"]:
+            flag("RUBRIC_RECEIPT_MISMATCH_" + stage.upper())
+            continue
+        if receipt.get("model_verified") is not True or not model_matches(
+                receipt.get("model_requested"), receipt.get("model_resolved")):
+            flag("MODEL_NOT_VERIFIED_" + stage.upper())
+        session = receipt.get("session_id")
+        if not isinstance(session, str) or not session:
+            flag("SESSION_ID_MISSING_" + stage.upper())
+        else:
+            sessions.append(session)
+    if len(set(sessions)) != len(STAGES):
+        flag("NONINDEPENDENT_REVIEW_SESSIONS")
 
     results = {}
     for stage in STAGES:
@@ -121,7 +146,7 @@ def replay(gold, report, source_sha: str, policy_sha: str, label: str, policy: d
     # have NO authority in a benchmark. Recompute using one invariant scorer.
     # backend='claude' means check semantic conditions independently of origin,
     # NOT that authenticated Claude ran or that an approval was issued.
-    agg = summarize(lint, results, policy, "claude")
+    agg = summarize(lint, results, policy, "claude", receipts=receipts)
     computed = agg["status"]
     prior = run.get("aggregate")
     if not isinstance(prior, dict) or prior.get("status") != computed or (

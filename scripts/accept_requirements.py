@@ -18,6 +18,7 @@ import sys
 import zipfile
 
 from export_forge_handoff import validate_criteria, _feature_tags
+from quality_review import model_matches, prompt_for, rubric_packet
 
 HEX = re.compile(r"[0-9a-f]{64}\Z")
 AC = re.compile(r"AC-[A-Za-z0-9_.-]+\Z")
@@ -122,8 +123,9 @@ def inspect_handoff(raw: bytes, story: dict, system: str, ref: str, revision: st
     return ids
 
 
-def assess(*, story_data: bytes, current_data: bytes, review_data: bytes,
-           review_policy_data: bytes, acceptance_policy_data: bytes,
+def assess(*, story_data: bytes, current_data: bytes,
+           canonical_source_data: bytes, current_canonical_data: bytes, tracker_revision: str,
+           review_data: bytes, review_policy_data: bytes, acceptance_policy_data: bytes,
            zip_data: bytes, system: str, ref: str, revision: str):
     # All inputs are operator-supplied snapshots. Compare bytes; no network
     # identity or authority is inferred from their contents.
@@ -132,6 +134,15 @@ def assess(*, story_data: bytes, current_data: bytes, review_data: bytes,
            "Invalid source system/reference")
     ensure(isinstance(revision, str) and revision.isdigit() and int(revision) > 0,
            "Invalid revision")
+    ensure(isinstance(tracker_revision, str) and 1 <= len(tracker_revision) <= 200
+           and not any(ord(ch) < 32 for ch in tracker_revision),
+           "Missing authoritative tracker revision reference")
+    ensure(isinstance(canonical_source_data, bytes) and 0 < len(canonical_source_data) <= MAX_INPUT
+           and isinstance(current_canonical_data, bytes) and
+           0 < len(current_canonical_data) <= MAX_INPUT,
+           "Missing bounded canonical source snapshots")
+    canonical_source_data.decode("utf-8")
+    current_canonical_data.decode("utf-8")
     story = parse(story_data)
     ensure(isinstance(story, dict), "Story must be a JSON object")
     ids = inspect_handoff(zip_data, story, system, ref, revision)
@@ -152,6 +163,10 @@ def assess(*, story_data: bytes, current_data: bytes, review_data: bytes,
 
     if story_data != current_data:
         block("FROZEN_SOURCE_DIFFERS_FROM_SUPPLIED_CURRENT_SNAPSHOT")
+    if canonical_source_data != current_canonical_data:
+        block("CANONICAL_TRACKER_SOURCE_CHANGED")
+    # Both snapshots are caller-supplied. Only the trusted tracker adapter can
+    # establish their true provenance and compare revisions atomically.
 
     if review.get("schema_version") != 1 or review.get("kind") != "clarity-independent-review":
         block("INVALID_REVIEW_ENVELOPE")
@@ -159,6 +174,9 @@ def assess(*, story_data: bytes, current_data: bytes, review_data: bytes,
         block("REVIEW_STORY_DIGEST_MISMATCH")
     if review.get("policy_file_sha256") != sha(review_policy_data):
         block("REVIEW_POLICY_DIGEST_MISMATCH")
+    rubric_text, rubric_digest = rubric_packet()
+    if review.get("rubric_file_sha256") != rubric_digest:
+        block("REVIEW_RUBRIC_DIGEST_MISMATCH")
     if review.get("pilot_with_draft_policy") is not False:
         block("PILOT_OR_UNVERIFIED_POLICY_REVIEW")
     lint = review.get("deterministic")
@@ -211,9 +229,21 @@ def assess(*, story_data: bytes, current_data: bytes, review_data: bytes,
                         block("SEMANTIC_DIMENSIONS_NOT_CLEAN")
                 elif outcome.get("dimensions") != []:
                     block("UNEXPECTED_STAGE_DIMENSIONS")
-                if receipt.get("backend") != "claude-code" or receipt.get("synthetic") is True or \
+                if receipt.get("backend") not in ("claude-code", "provider-adapter") or \
+                   receipt.get("synthetic") is True or \
                    not isinstance(receipt.get("session_id"), str) or not receipt["session_id"]:
                     block("UNVERIFIED_REVIEW_BACKEND")
+                if receipt.get("model_verified") is not True or not model_matches(
+                    receipt.get("model_requested"), receipt.get("model_resolved")
+                ):
+                    block("MODEL_IDENTITY_UNVERIFIED")
+                if receipt.get("rubric_sha256") != rubric_digest:
+                    block("REVIEW_RUBRIC_DIGEST_MISMATCH")
+                expected_prompt = prompt_for(stage, story, project_review_policy,
+                                             results.get("investigator") if stage == "evaluator" else None,
+                                             rubric=rubric_text)
+                if receipt.get("prompt_sha256") != sha(expected_prompt.encode("utf-8")):
+                    block("REVIEW_PROMPT_DIGEST_MISMATCH")
                 if receipt.get("input_sha256") != story_hash or receipt.get("policy_sha256") != policy_hash:
                     block("REVIEW_RECEIPT_INPUT_MISMATCH")
                 rid = receipt.get("run_id")
@@ -250,6 +280,8 @@ def assess(*, story_data: bytes, current_data: bytes, review_data: bytes,
         "schema_version": 1,
         "kind": "clarity-requirement-acceptance-proposal",
         "source": {"system": system, "ref": ref, "revision": revision,
+                   "tracker_revision": tracker_revision,
+                   "canonical_content_sha256": sha(canonical_source_data),
                    "content_sha256": sha(story_data)},
         "handoff_sha256": sha(zip_data),
         "criterion_ids": ids,
@@ -264,16 +296,21 @@ def assess(*, story_data: bytes, current_data: bytes, review_data: bytes,
 
 def main():
     p = argparse.ArgumentParser(description=__doc__)
-    for flag in ("story", "current-story", "review", "review-policy", "acceptance-policy",
-                 "handoff", "output"):
+    for flag in ("story", "current-story", "canonical-source", "current-canonical",
+                 "review", "review-policy", "acceptance-policy", "handoff", "output"):
         p.add_argument("--" + flag, required=True, type=Path)
     p.add_argument("--source-system", choices=sorted(KINDS), required=True)
     p.add_argument("--source-ref", required=True)
-    p.add_argument("--revision", required=True)
+    p.add_argument("--revision", required=True, help="Integer Forge v2 package revision")
+    p.add_argument("--tracker-revision", required=True,
+                   help="Exact source tracker revision or updatedAt; not a Forge integer revision")
     a = p.parse_args()
     try:
         payload = assess(
             story_data=read(a.story), current_data=read(a.current_story),
+            canonical_source_data=read(a.canonical_source),
+            current_canonical_data=read(a.current_canonical),
+            tracker_revision=a.tracker_revision,
             review_data=read(a.review), review_policy_data=read(a.review_policy),
             acceptance_policy_data=read(a.acceptance_policy),
             zip_data=read(a.handoff, MAX_ZIP),

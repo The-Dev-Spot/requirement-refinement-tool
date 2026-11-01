@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://the-dev-spot.invalid/clarity/schemas/requirement-acceptance-proposal-v1.schema.json",
   "title": "Clarity Requirement Acceptance Proposal v1 (untrusted, non-authorizing)",
-  "description": "A data-only proposal for a trusted project acceptance service. CANDIDATE never means ACCEPTED or permission to execute.",
+  "description": "Data-only proposal: source.content_sha256 binds reviewed story JSON; canonical_content_sha256 independently binds original UTF-8 tracker description; tracker_revision is the authoritative tracker locator as supplied by a still-untrusted adapter. Never grants ACCEPTED.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -32,6 +32,8 @@
         "system",
         "ref",
         "revision",
+        "tracker_revision",
+        "canonical_content_sha256",
         "content_sha256"
       ],
       "properties": {
@@ -55,6 +57,14 @@
           "maxLength": 200
         },
         "content_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "tracker_revision": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "canonical_content_sha256": {
           "$ref": "#/$defs/sha256"
         }
       }
