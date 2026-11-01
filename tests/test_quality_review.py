@@ -80,6 +80,9 @@ class ReviewContractTests(unittest.TestCase):
         self.assertTrue(model_matches("opus","claude-opus-5-5"))
         self.assertTrue(model_matches("gpt-6","gpt-6"))
         self.assertFalse(model_matches("claude-opus-5-5","claude-sonnet-4-6"))
+        self.assertFalse(model_matches("gpt-6","gpt-6-mini"))
+        self.assertFalse(model_matches("claude-opus-5-5","claude-opus-5-5-mini"))
+        self.assertTrue(model_matches("claude-opus-5-5","claude-opus-5-5-20261101"))
         self.assertFalse(model_matches("gpt-6",None))
 
     def test_adapter_uses_same_schema_and_requires_reported_model(self):
