@@ -166,7 +166,8 @@ class ModelNeutralBenchmarks(unittest.TestCase):
         b["run"]["aggregate"]["status"]="READY"
         b["run"]["aggregate"]["ready_for_handover"]=True
         result=compare(c,s,p,{"reviewer_a":a,"reviewer_b":b})
-        self.assertEqual(result["benchmark_result"],"PASS")
+        self.assertEqual(result["benchmark_result"],"FAIL")
+        self.assertIn("UNTRUSTED_AGGREGATE_CLAIM",result["reviews"][1]["problems"])
         self.assertFalse(result["publication_authority"])
         self.assertFalse(result["ready_for_handover"])
 
