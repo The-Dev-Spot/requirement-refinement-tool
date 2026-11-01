@@ -481,6 +481,16 @@ def review(story, policy, *, lint, provider, model=None, timeout=120, max_budget
                 failures.append(failure_record(error))
                 return {"results": results, "receipts": receipts, "failures": failures,
                         "aggregate": summarize(lint, results, policy, provider, receipts=receipts)}
+            except subprocess.TimeoutExpired as error:
+                failures.append(failure_record(StageInvocationFailure(
+                    stage, "MODEL_TIMEOUT", "Provider invocation timed out")))
+                return {"results": results, "receipts": receipts, "failures": failures,
+                        "aggregate": summarize(lint, results, policy, provider, receipts=receipts)}
+            except (OSError, ValueError) as error:
+                failures.append(failure_record(StageInvocationFailure(
+                    stage, "PROVIDER_RUNTIME_ERROR", str(error)[:450])))
+                return {"results": results, "receipts": receipts, "failures": failures,
+                        "aggregate": summarize(lint, results, policy, provider, receipts=receipts)}
         results[stage] = data
         actual_prompt = prompt_for(stage, story, policy, results.get("investigator") if stage == "evaluator" else None, rubric=rubric)
         receipts[stage] = {"run_id": str(uuid.uuid4()), "input_sha256": digest(canonical(story).encode()),
