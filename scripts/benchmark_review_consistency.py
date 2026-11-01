@@ -79,7 +79,7 @@ def validate_gold(gold, source: str, source_sha: str, policy_sha: str):
     return gold
 
 
-def replay(gold, report, source_sha: str, policy_sha: str, label: str):
+def replay(gold, report, source_sha: str, policy_sha: str, label: str, policy: dict):
     problems = []
     def flag(reason):
         if reason not in problems:
@@ -121,7 +121,6 @@ def replay(gold, report, source_sha: str, policy_sha: str, label: str):
     # have NO authority in a benchmark. Recompute using one invariant scorer.
     # backend='claude' means check semantic conditions independently of origin,
     # NOT that authenticated Claude ran or that an approval was issued.
-    policy = {"adopted": True, "risk_register_status": "APPROVED"}
     agg = summarize(lint, results, policy, "claude")
     computed = agg["status"]
     prior = run.get("aggregate")
@@ -152,7 +151,13 @@ def compare(gold, story_bytes: bytes, policy_bytes: bytes, reports: dict):
     validate_gold(gold, story_bytes.decode("utf-8"), story_sha, policy_sha)
     if not isinstance(reports, dict) or len(reports) < 2 or len(reports) > 8:
         raise ValueError("Compare 2–8 named independent review packets")
-    results = [replay(gold, value, story_sha, policy_sha, label)
+    try:
+        policy = json.loads(policy_bytes.decode("utf-8"))
+    except (ValueError, UnicodeError) as exc:
+        raise ValueError("Invalid frozen review policy") from exc
+    if not isinstance(policy, dict):
+        raise ValueError("Frozen review policy must be an object")
+    results = [replay(gold, value, story_sha, policy_sha, label, policy)
                for label, value in sorted(reports.items())]
     statuses = {x["recomputed_aggregate"] for x in results}
     return {
