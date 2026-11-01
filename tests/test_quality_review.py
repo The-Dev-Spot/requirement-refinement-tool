@@ -129,6 +129,22 @@ class ReviewContractTests(unittest.TestCase):
         self.assertEqual(set(meta["model_usage_models"]),
                          {"claude-opus-5-5","claude-haiku-5-5"})
 
+    def test_provider_timeout_keeps_blocked_evidence(self):
+        with patch("quality_review.run_adapter",
+                   side_effect=subprocess.TimeoutExpired(cmd="trusted-adapter",timeout=10)):
+            r=review(story(),policy(),lint=lint(),provider="adapter",
+                     model="gpt-6",adapter=Path("/trusted/selected.py"))
+        self.assertEqual(r["aggregate"]["status"],"BLOCKED")
+        self.assertEqual(r["failures"][0]["code"],"MODEL_TIMEOUT")
+        self.assertIn("evaluator not executed",r["aggregate"]["reasons"])
+
+    def test_provider_launcher_error_keeps_blocked_evidence(self):
+        with patch("quality_review.run_adapter",side_effect=OSError("adapter executable missing")):
+            r=review(story(),policy(),lint=lint(),provider="adapter",
+                     model="gpt-6",adapter=Path("/trusted/selected.py"))
+        self.assertEqual(r["aggregate"]["status"],"BLOCKED")
+        self.assertEqual(r["failures"][0]["code"],"PROVIDER_RUNTIME_ERROR")
+
     def test_authoritative_rubric_definitions_are_in_all_stage_prompts(self):
         raw, sha=rubric_packet()
         self.assertIn("D4 | Testable & precise",raw)
