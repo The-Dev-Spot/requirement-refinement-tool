@@ -203,9 +203,79 @@ production readiness bypass.**
 
 The report contains input/policy hashes, actual preflight result, invocation IDs and model-provided output/metadata, plus a machine-derived aggregate. It does **not** attest that input policy was approved by a cryptographically verified owner or that model findings were factually correct. These require a trusted supervisor and human adoption before advancing to automatic Forge City dispatch.
 
+## Opt-in scoped decision provenance (HOM-1985)
+
+A reviewed source can contain **pilot-only**, **target-system**, and
+**historical** decisions that differ without necessarily conflicting.
+Reviewers must still reject truly contradictory current decisions in the
+**same** scope. Source text, not a model inference or a newer timestamp,
+establishes explicit supersession and project authority.
+
+For a **new** scoped review, set the exact matching `review_scope` in both
+the frozen story JSON and operator-selected policy JSON. Add the policy's
+`decision_register` array with **exact** keys: `id`, `scope`, `status`,
+`source`, `revision`, `authority`, `text`, and `supersedes` (array of
+decision IDs). Statuses are `ACTIVE`, `HISTORICAL`, or `PENDING`. Move
+all old `decisions` records into the scope-aware register and use
+`"decisions": []` to avoid mixing unlabeled precedent into the reviewed
+current authority.
+
+Example (abbreviated **synthetic** project policy; no owner attestation):
+
+```json
+{
+  "project": "Synthetic Forge City",
+  "adopted": false,
+  "risk_register_status": "DRAFT",
+  "review_scope": "PILOT_RC",
+  "decisions": [],
+  "decision_register": [
+    {"id": "OLD", "scope": "PILOT_RC", "status": "HISTORICAL",
+     "source": "archived issue", "revision": "r1", "authority": "owner-claim",
+     "text": "Old pilot limit", "supersedes": []},
+    {"id": "CURRENT", "scope": "PILOT_RC", "status": "ACTIVE",
+     "source": "new issue", "revision": "r2", "authority": "owner-claim",
+     "text": "One operator-authorized pilot", "supersedes": ["OLD"]},
+    {"id": "AUTOMATION", "scope": "TARGET_AUTO", "status": "ACTIVE",
+     "source": "target issue", "revision": "r3", "authority": "owner-claim",
+     "text": "No per-issue Start on a qualified automatic service", "supersedes": []}
+  ]
+}
+```
+
+The story JSON also needs `"review_scope": "PILOT_RC"`. This opt-in
+contract validates scope equality, unique IDs, allowed statuses, at
+least one active decision in the selected scope, and explicit
+**same-scope** supersession of records marked historical. A claimed
+supersession of an active or different-scope decision is rejected before
+model inference. Any `PENDING` decision in the chosen scope **blocks a
+reviewable candidate**, even if the model reports all PASS. Legacy
+unscoped packets still work through the preexisting rules.
+
+This is **structural validation only**. Clarity cannot verify that an
+`authority` field came from the owner, authenticate the source revision,
+or mechanically detect semantic contradictions between two active
+decisions. All three independent stages receive explicit scoped
+provenance instructions and must flag real same-scope contradictions;
+a separate authenticated issuer must verify actual precedence,
+adoption, source freshness and signing. **Neither a decision register
+nor a green score confers publication or Forge execution authority.**
+
+See the Forge City canonical decision register in Linear and
+[HOM-1985](https://linear.app/sashafelix-homelab/issue/HOM-1985).
+
 ## First M0 pilot
 
-Use **HOM-1972** first because it contains the intentionally detectable conflict between the approved **Clarity+Forge normal/critical worker topology** and a superseded statement about **one global active Claude session/two total workers**. The investigator and *blind* challenger should each independently find and cite that conflict. The evaluator should not report D6/D8 clean without resolving authoritative sources.
+The **frozen 2026-11-01 HOM-1972 source** intentionally contained
+contradictory, unlabeled manual pilot and automatic target text; preserve
+its original SHA and three-stage BLOCKED result for the regression
+baseline. The current Linear HOM-1972 was normalized afterward into
+PILOT_RC and explicitly delegates worker capacity and automatic
+dispatch to HOM-1973/HOM-1979. It is a **different source revision**.
+For the next review, retrieve and freeze both the updated tracker
+description and the current scoped project-policy packet, and verify
+their revision/hashes before running the model. Do **not** reuse the old
+pilot result or silently rewrite the historical findings.
 
 Next, run HOM-1945 (security threat model, D5/D10) and HOM-1943 (nonbehavioral architecture/reuse research, D1/D6/D8). Compare with the original manual M0 baseline using the exact same source revisions, signed-off policy and evaluator version. Capture blockers caught, false positives, unsupported inventions, AC inflation and model usage; do not claim a gain merely because the model produced more words.
 
