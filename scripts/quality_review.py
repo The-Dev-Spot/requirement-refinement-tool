@@ -361,10 +361,6 @@ def review(story, policy, *, lint, provider, model=None, timeout=120, max_budget
     verify_inputs(story, policy)
     results, receipts = {}, {}
     rubric, rubric_sha = rubric_packet()
-    if provider in ("claude", "adapter") and (not isinstance(model, str) or not model.strip()):
-        raise ValueError("Select a concrete requested model for live review")
-    if provider == "adapter" and adapter is None:
-        raise ValueError("Provider adapter must be explicitly configured by operator")
     if lint.get("kind") != "clarity-deterministic-quality-report":
         raise ValueError("Missing real deterministic report")
     if lint.get("status") not in ("PASS", "WARN", "FAIL", "BLOCKED"):
@@ -377,6 +373,12 @@ def review(story, policy, *, lint, provider, model=None, timeout=120, max_budget
         # pilot mode permits research but aggregation remains BLOCKED, and
         # nothing in the runner creates publication or execution authority.
         return {"results": results, "receipts": receipts, "aggregate": summarize(lint, results, policy, provider)}
+    # No model or external provider configuration is required to reject an
+    # already-invalid requirement before spending inference or requiring auth.
+    if provider in ("claude", "adapter") and (not isinstance(model, str) or not model.strip()):
+        raise ValueError("Select a concrete requested model for live review")
+    if provider == "adapter" and adapter is None:
+        raise ValueError("Provider adapter must be explicitly configured by operator")
     for stage in STAGES:
         if fixture_dir:
             data = check_stage(stage, read_json(Path(fixture_dir) / (stage + ".json")))
