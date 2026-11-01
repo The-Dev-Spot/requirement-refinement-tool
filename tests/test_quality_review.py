@@ -1,6 +1,8 @@
 """Real local Clarity multi-session runner contract; NO paid API in CI."""
 import copy
 import json
+import os
+import stat
 from pathlib import Path
 import subprocess
 import sys
@@ -11,7 +13,8 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 from quality_review import (
     DIMS, check_stage, digest, prompt_for, review, run_claude, run_adapter,
-    model_matches, rubric_packet, sanitized_env, summarize, verify_inputs
+    model_matches, rubric_packet, sanitized_env, summarize, verify_inputs,
+    output_schema_for, StageInvocationFailure, write_private_report, is_hosted_session
 )
 
 
@@ -53,6 +56,78 @@ class ReviewContractTests(unittest.TestCase):
         verify_inputs(story(),policy())
         bad=policy();bad["decisions"]=[{"id":"A", "text":"Unversioned decision"}]
         with self.assertRaises(ValueError):verify_inputs(story(),bad)
+
+    def test_each_stage_uses_its_own_minimal_structured_output_schema(self):
+        for stage in ("investigator", "challenger"):
+            schema=output_schema_for(stage)
+            self.assertEqual(schema["properties"]["stage"]["enum"],[stage])
+            self.assertEqual(schema["properties"]["dimensions"]["maxItems"],0)
+        evaluator=output_schema_for("evaluator")
+        self.assertEqual(evaluator["properties"]["dimensions"]["minItems"],10)
+        self.assertEqual(evaluator["properties"]["dimensions"]["maxItems"],10)
+        # Never modify the canonical schema for another caller.
+        self.assertNotIn("maxItems",output_schema_for("challenger")["properties"]["findings"])
+        with self.assertRaisesRegex(ValueError,"Unknown review stage"):
+            output_schema_for("outsider")
+
+    def test_malformed_investigator_output_preserves_failed_stage_evidence(self):
+        # Reproduces the 2026-11-01 hosted Opus failure without private data.
+        malformed=result("evaluator")
+        malformed["stage"]="investigator"
+        envelope={"is_error":False, "structured_output":malformed,
+                  "session_id":"synthetic-host", "model":None,
+                  "modelUsage":{"claude-opus-5-5":{},"claude-haiku-5-5":{}}}
+        stdout=json.dumps(envelope)
+        def fake(args,**kwargs):
+            return subprocess.CompletedProcess(args,0,stdout,"")
+        with patch.dict("quality_review.os.environ",{},clear=True):
+            with patch("quality_review.subprocess.run",side_effect=fake):
+                r=review(story(),policy(),lint=lint(),provider="claude",
+                         model="claude-opus-5-5")
+        self.assertEqual(r["aggregate"]["status"],"BLOCKED")
+        self.assertEqual(r["failures"][0]["code"],"MODEL_STAGE_SCHEMA_INVALID")
+        self.assertEqual(r["failures"][0]["stage"],"investigator")
+        self.assertEqual(r["failures"][0]["raw_envelope"],stdout)
+        self.assertEqual(r["failures"][0]["raw_envelope_sha256"],digest(stdout.encode()))
+        self.assertEqual(r["results"],{})
+        with tempfile.TemporaryDirectory() as folder:
+            path=Path(folder)/"private"/"blocked.json"
+            write_private_report(path,{"run":r})
+            loaded=json.loads(path.read_text())
+            self.assertEqual(loaded["run"]["failures"][0]["code"],"MODEL_STAGE_SCHEMA_INVALID")
+            self.assertEqual(stat.S_IMODE(path.stat().st_mode),0o600)
+            with self.assertRaises(FileExistsError):
+                write_private_report(path,{"run":r})
+
+    def test_hosted_session_refuses_nested_cli_before_spending_tokens(self):
+        with patch.dict("quality_review.os.environ",{
+            "CLAUDE_CODE_REMOTE_SESSION_ID":"inherited-id",
+            "CLAUDE_SESSION_INGRESS_TOKEN_FILE":"/tmp/inherited-ingress",
+            "SESSION_INGRESS_URL":"https://invalid.example/"
+        },clear=True):
+            self.assertTrue(is_hosted_session())
+            for key in ("CLAUDE_CODE_REMOTE_SESSION_ID",
+                        "CLAUDE_SESSION_INGRESS_TOKEN_FILE","SESSION_INGRESS_URL"):
+                self.assertNotIn(key,sanitized_env())
+            with patch("quality_review.subprocess.run",side_effect=AssertionError("No nested model call")):
+                with self.assertRaises(StageInvocationFailure) as caught:
+                    run_claude("investigator","PRIVATE",model="claude-opus-5-5",
+                               timeout=10,max_budget=1)
+            self.assertEqual(caught.exception.code,"HOSTED_SESSION_NOT_ISOLATED")
+
+    def test_mixed_model_usage_cannot_be_accepted_as_opus(self):
+        envelope={"is_error":False,"structured_output":result("investigator"),
+                  "session_id":"session-new", "model":None,
+                  "modelUsage":{"claude-opus-5-5":{},"claude-haiku-5-5":{}}}
+        with patch.dict("quality_review.os.environ",{},clear=True):
+            with patch("quality_review.subprocess.run",
+                       return_value=subprocess.CompletedProcess([],0,json.dumps(envelope),"")):
+                _,meta=run_claude("investigator","PRIVATE",model="claude-opus-5-5",
+                                   timeout=10,max_budget=1)
+        self.assertIsNone(meta["model_resolved"])
+        self.assertFalse(meta["model_verified"])
+        self.assertEqual(set(meta["model_usage_models"]),
+                         {"claude-opus-5-5","claude-haiku-5-5"})
 
     def test_authoritative_rubric_definitions_are_in_all_stage_prompts(self):
         raw, sha=rubric_packet()
@@ -104,6 +179,7 @@ class ReviewContractTests(unittest.TestCase):
         self.assertEqual(meta["backend"],"provider-adapter")
         self.assertTrue(meta["model_verified"])
         self.assertEqual(seen["request"]["stage"],"investigator")
+        self.assertEqual(seen["request"]["output_schema"]["properties"]["dimensions"]["maxItems"],0)
         self.assertEqual(seen["request"]["model_requested"],"gpt-6")
         self.assertNotIn("SENSITIVE"," ".join(seen["args"]))
 
