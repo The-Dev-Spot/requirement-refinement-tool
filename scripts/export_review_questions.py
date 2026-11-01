@@ -59,7 +59,12 @@ def extract_proposals(report):
 
     report_hash = sha(canonical(report).encode())
     batch_id = "clarity-q-" + report_hash[:32]
+    if set(results) - set(STAGES):
+        raise ValueError("Unknown reviewer stage in report")
+    if aggregate["status"] == "REVIEWABLE_CANDIDATE" and set(results) != set(STAGES):
+        raise ValueError("Reviewable candidate must contain all three stages")
     combined = {}
+    sessions = set()
     for stage in STAGES:
         if stage not in results:
             continue
@@ -71,6 +76,9 @@ def extract_proposals(report):
                 or not isinstance(receipt.get("session_id"), str)
                 or not receipt["session_id"]):
             raise ValueError("Question stage has no validated model/session receipt")
+        if receipt["session_id"] in sessions:
+            raise ValueError("Duplicate reviewer session identity")
+        sessions.add(receipt["session_id"])
         questions = result.get("questions")
         if not isinstance(questions, list) or len(questions) > 50:
             raise ValueError("Malformed stage question list")
@@ -88,6 +96,8 @@ def extract_proposals(report):
                     "authority": "UNVERIFIED",
                 }
             combined[identity]["proposed_by"].append(stage)
+    if aggregate["status"] == "REVIEWABLE_CANDIDATE" and combined:
+        raise ValueError("Reviewable candidate cannot have unresolved questions")
     if len(combined) > MAX_PROPOSED_QUESTIONS:
         raise ValueError("Too many proposed questions")
 
