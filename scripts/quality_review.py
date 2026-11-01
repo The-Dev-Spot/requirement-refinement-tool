@@ -269,11 +269,15 @@ def run_claude(stage, prompt, *, model, timeout, max_budget):
         raise ValueError("Model invocation failed or exceeded result size")
     data, meta = extract_structured(response.stdout)
     resolved = meta.get("model")
+    models_used = meta.get("model_usage_models") or []
+    verified = (model_matches(model, resolved) and
+                (not models_used or (len(models_used) == 1 and
+                                     model_matches(model, models_used[0]))))
     return check_stage(stage, data), {"backend": "claude-code",
                                       "elapsed_s": round(time.monotonic() - started, 2),
                                       "model_requested": model,
                                       "model_resolved": resolved,
-                                      "model_verified": model_matches(model, resolved),
+                                      "model_verified": verified,
                                       **meta}
 
 
@@ -405,6 +409,15 @@ def review(story, policy, *, lint, provider, model=None, timeout=120, max_budget
                            "rubric_sha256": rubric_sha,
                            "prompt_sha256": digest(actual_prompt.encode("utf-8")) if not fixture_dir else None,
                            **meta}
+        if provider in ("claude", "adapter"):
+            # Fail before spending more inference if the current provider
+            # cannot identify its model/session or repeats a prior session.
+            ids = [r.get("session_id") for r in receipts.values()]
+            if (meta.get("model_verified") is not True or
+                not isinstance(meta.get("session_id"), str) or
+                not meta["session_id"] or len(set(ids)) != len(ids)):
+                return {"results": results, "receipts": receipts,
+                        "aggregate": summarize(lint, results, policy, provider, receipts=receipts)}
     return {"results": results, "receipts": receipts,
             "aggregate": summarize(lint, results, policy, provider, receipts=receipts)}
 
