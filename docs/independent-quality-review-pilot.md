@@ -203,12 +203,93 @@ production readiness bypass.**
 
 The report contains input/policy hashes, actual preflight result, invocation IDs and model-provided output/metadata, plus a machine-derived aggregate. It does **not** attest that input policy was approved by a cryptographically verified owner or that model findings were factually correct. These require a trusted supervisor and human adoption before advancing to automatic Forge City dispatch.
 
+## Read-only Linear/GitHub source collector (HOM-1989, initial build)
+
+The standalone `scripts/collect_context.py` runs **before** the model
+reviewer. It uses only fixed `https://api.linear.app/graphql` read
+queries and GitHub `GET /repos/.../commits` / `contents` operations.
+It never executes source instructions, clones repositories, calls models,
+modifies Linear/GitHub, posts Slack messages, or issues acceptance.
+
+The source selection is an **operator-controlled plan**, not a model
+recommendation, URL found inside an issue, or arbitrary repository
+checkout. Start from
+`examples/hom-1972-evidence-plan.json`. Its `linear` list names
+explicit issue IDs, scope and an optional literal excerpt focus; its
+`github` list names repository, pinned-at-read `main` or `master`,
+file path, scope, kind and literal excerpt focus. Missing files, denied
+access, changed focus, unsupported schema or provider rate limits
+**block** rather than silently falling back. A bounded re-read detects
+source changes that occur during collection, producing
+`SOURCE_CHANGED`, but a stable read is still only
+`SOURCE_UNVERIFIED`: no owner has signed an authoritative policy.
+
+The source JSON **story** must contain the canonical
+`source_issue_id` and the same `review_scope` as the policy; the
+policy must list `evidence_allowed_repositories` and
+`evidence_linear_workspace`. Existing archived review inputs must
+*not* be rewritten or have their former digests reused. The collector
+does not expand links recursively or read unlisted repositories. The
+GitHub evidence is pinned to an actual 40-character commit SHA and
+cited by file and line; Linear issue evidence is bound to issue
+identifier and `updatedAt`. Source snippets (at most 2,900
+characters) remain **untrusted data**, and obvious token-shaped
+content is rejected, not echoed.
+
+### Operator-provisioned credentials
+
+Use separate, revocable, minimal-scope credentials:
+
+- Linear personal API key with **Read only**, scoped to the Homelab
+  team. Official documentation:
+  https://linear.app/docs/api-and-webhooks
+- GitHub fine-grained token for only the allowlisted repository or
+  repositories, **Contents: read** and Metadata: read; **no write,
+  administration or workflow permissions**. Official documentation:
+  https://docs.github.com/en/rest/repos/contents
+
+Never put tokens in an issue, Slack, CI secret display, Git, the model
+prompt or this chat. Each credential goes in its **own private mode-0600
+file**, accessible only to the standalone collector's OS user. The
+collector refuses symlinks, group/world readable credentials and
+credentials supplied as command arguments. Rotate and revoke these
+independently of the connected ChatGPT apps.
+
+### Example offline invocation (only after private provisioning)
+
+```sh
+python3 scripts/collect_context.py \
+  --plan examples/hom-1972-evidence-plan.json \
+  --story /private/current/HOM-1972.story.json \
+  --policy /private/current/forge-city.project-policy.json \
+  --linear-key-file /private/secrets/linear-read.key \
+  --github-key-file /private/secrets/github-read.key \
+  --output /private/evidence/HOM-1972.latest.evidence.json
+```
+
+The private output directory must already exist with mode 0700; the
+output must not already exist. It is written exclusively with mode 0600.
+The collector prints only number of excerpts, freshness status and a
+packet SHA, not raw credentials, answers or issue content. The evidence
+packet is then passed separately to
+`scripts/quality_review.py --evidence-pack ...`, only after the
+operator pins the same exact story/policy revision. Existing stage
+isolation and the **fail-closed NOT_VERIFIED acceptance condition**
+remain unchanged. A new paid Opus run is **not** triggered by collection.
+
+**Current limitations:** manual bounded allowlist (no recursive link
+discovery), no Linear project-document API retrieval yet, literal
+excerpt-focused selection, no signed source/owner authority, and no
+automatic update of the inbox's 27 historical questions. The next
+milestone is validating the real source against the trusted owner policy,
+then a separate source-aware question consolidation and fresh review.
+
 ## Evidence-first context from Linear and GitHub (HOM-1989, experimental)
 
 Clarity can now **consume a pre-collected read-only, source-pinned context
-packet** using `--evidence-pack /private/context.json`. This is **not a
-GitHub/Linear API client**: credentials and API calls belong to a future
-independent, allowlisted coordinator, NOT the isolated model reviewer.
+packet** using `--evidence-pack /private/context.json`. The Clarity model reviewer is **not a
+GitHub/Linear API client**: credentials and API calls belong only to the
+separate, allowlisted `collect_context.py` coordinator, NOT the isolated model reviewer.
 The optional input preserves backward compatibility with legacy reviews.
 
 The operator-selected project policy must explicitly include
@@ -251,10 +332,10 @@ still block independently. No tracker writes, network access, Slack sending,
 auto acceptance or Forge dispatch are added. Do **not** reuse the original
 2026-11-01 historical pilot SHAs for the normalized HOM-1972 story.
 
-A trusted collector is still needed to retrieve a versioned current Linear
-issue/project/decision snapshot plus GitHub allowlisted files at fixed commit
-SHA, bind the exact owner-adopted policy and verify freshness, then deliver
-this private packet. A later trusted acceptance issuer is separately
+The initial read-only collector now retrieves specifically allowed Linear
+issues and GitHub files at fixed commit SHAs. A *trusted source-authority
+issuer*, broader related-document retrieval and ratified policy freshness
+verification are still needed before any acceptance. A later trusted acceptance issuer is separately
 responsible for any `ACCEPTED_FOR_FORGE` status. The first synthetic tests
 verify safe citations, stale/bad digest rejection and no unearned PASS.
 
