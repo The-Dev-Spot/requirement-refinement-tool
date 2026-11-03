@@ -214,7 +214,10 @@ modifies Linear/GitHub, posts Slack messages, or issues acceptance.
 The source selection is an **operator-controlled plan**, not a model
 recommendation, URL found inside an issue, or arbitrary repository
 checkout. Start from
-`examples/hom-1972-evidence-plan.json`. Its `linear` list names
+`examples/hom-1972-evidence-plan.json`. Its optional `documents` list
+pins exact Linear document UUIDs, URLs, scope and a literal excerpt focus;
+this allows the canonical Forge City decision register to be consulted.
+Its `linear` list names
 explicit issue IDs, scope and an optional literal excerpt focus; its
 `github` list names repository, pinned-at-read `main` or `master`,
 file path, scope, kind and literal excerpt focus. Missing files, denied
@@ -231,8 +234,8 @@ policy must list `evidence_allowed_repositories` and
 *not* be rewritten or have their former digests reused. The collector
 does not expand links recursively or read unlisted repositories. The
 GitHub evidence is pinned to an actual 40-character commit SHA and
-cited by file and line; Linear issue evidence is bound to issue
-identifier and `updatedAt`. Source snippets (at most 2,900
+cited by file and line; Linear issue and document evidence is bound to issue identifier or document
+UUID, exact approved URL and `updatedAt`. Source snippets (at most 2,900
 characters) remain **untrusted data**, and obvious token-shaped
 content is rejected, not echoed.
 
@@ -278,7 +281,7 @@ isolation and the **fail-closed NOT_VERIFIED acceptance condition**
 remain unchanged. A new paid Opus run is **not** triggered by collection.
 
 **Current limitations:** manual bounded allowlist (no recursive link
-discovery), no Linear project-document API retrieval yet, literal
+discovery), explicitly selected Linear documents only (no free-text document discovery), literal
 excerpt-focused selection, no signed source/owner authority, and no
 automatic update of the inbox's 27 historical questions. The next
 milestone is validating the real source against the trusted owner policy,
