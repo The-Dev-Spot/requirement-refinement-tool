@@ -24,6 +24,7 @@ MAX_FILE = 120_000
 MAX_PLAN = 12_000
 MAX_SOURCES = 20
 ISSUE_RE = re.compile(r"[A-Z][A-Z0-9]+-[0-9]+\Z")
+DOC_RE = re.compile(r"[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}\Z")
 REPO_RE = re.compile(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+\Z")
 SCOPE_RE = re.compile(r"[A-Z][A-Z0-9_]{2,63}\Z")
 SHA_RE = re.compile(r"[0-9a-f]{40}\Z")
@@ -31,6 +32,9 @@ REV_RE = re.compile(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d+)?Z\Z")
 PATH_PART_RE = re.compile(r"[A-Za-z0-9._-]+\Z")
 LINEAR_QUERY = """query ClarityEvidenceIssue($id: String!) {
   issue(id: $id) { identifier title description updatedAt }
+}"""
+DOCUMENT_QUERY = """query ClarityEvidenceDocument($id: String!) {
+  document(id: $id) { id title content updatedAt url }
 }"""
 
 
@@ -99,6 +103,24 @@ class LinearRead:
                 or not isinstance(result.get("updatedAt"), str)
                 or not REV_RE.fullmatch(result["updatedAt"])):
             raise ValueError("Linear source missing revision or content")
+        return result
+
+    def document(self, document_id):
+        response = self.http.json(
+            "POST", "https://api.linear.app/graphql",
+            {"Authorization": self.key, "Content-Type": "application/json"},
+            {"query": DOCUMENT_QUERY, "variables": {"id": document_id}})
+        if response.get("errors") or not isinstance(response.get("data"), dict):
+            raise ValueError("Linear GraphQL document read failed or was partial")
+        result = response["data"].get("document")
+        if (not isinstance(result, dict)
+                or result.get("id") != document_id
+                or not isinstance(result.get("title"), str)
+                or not isinstance(result.get("content"), str)
+                or not isinstance(result.get("url"), str)
+                or not isinstance(result.get("updatedAt"), str)
+                or not REV_RE.fullmatch(result["updatedAt"])):
+            raise ValueError("Linear document missing, unverified, or incomplete")
         return result
 
 
@@ -187,18 +209,20 @@ def valid_path(path):
 
 
 def validate_plan(plan, story, policy):
-    if not isinstance(plan, dict) or set(plan) != {
-            "schema_version", "target_issue", "linear", "github"}:
+    allowed_keys = {"schema_version", "target_issue", "linear", "github"}
+    if (not isinstance(plan, dict)
+            or set(plan) not in (allowed_keys, allowed_keys | {"documents"})):
         raise ValueError("Collector plan requires exact bounded fields")
     target = plan.get("target_issue")
     if (plan["schema_version"] != 1 or not isinstance(target, str)
             or not ISSUE_RE.fullmatch(target)
             or story.get("source_issue_id") != target):
         raise ValueError("Collector plan target must match canonical story issue")
-    issue_items, code_items = plan["linear"], plan["github"]
+    issue_items, code_items, documents = plan["linear"], plan["github"], plan.get("documents", [])
     if (not isinstance(issue_items, list) or not 1 <= len(issue_items) <= 15
             or not isinstance(code_items, list) or len(code_items) > 10
-            or len(issue_items) + len(code_items) > MAX_SOURCES):
+            or not isinstance(documents, list) or len(documents) > 5
+            or len(issue_items) + len(code_items) + len(documents) > MAX_SOURCES):
         raise ValueError("Collector plan exceeds source limits")
     ids = set()
     for item in issue_items:
@@ -213,6 +237,25 @@ def validate_plan(plan, story, policy):
         ids.add(iid)
     if target not in ids:
         raise ValueError("Target issue must be in Linear source selection")
+    workspace = policy.get("evidence_linear_workspace")
+    if not isinstance(workspace, str) or not re.fullmatch(r"[A-Za-z0-9_-]+", workspace):
+        raise ValueError("Linear workspace must be explicitly allowlisted")
+    doc_ids = set()
+    for selected in documents:
+        if not isinstance(selected, dict) or set(selected) != {
+                "id", "scope", "focus", "url"}:
+            raise ValueError("Invalid Linear document selection")
+        did, scope, focus, url = (selected["id"], selected["scope"],
+                                  selected["focus"], selected["url"])
+        prefix = "https://linear.app/" + workspace + "/document/"
+        if (not isinstance(did, str) or not DOC_RE.fullmatch(did)
+                or did in doc_ids or not isinstance(scope, str)
+                or not SCOPE_RE.fullmatch(scope)
+                or not isinstance(focus, str) or len(focus) > 100
+                or not isinstance(url, str) or not url.startswith(prefix)
+                or not re.fullmatch(r"[A-Za-z0-9_-]+", url[len(prefix):])):
+            raise ValueError("Unauthorized or duplicate Linear document selection")
+        doc_ids.add(did)
     allowed = policy.get("evidence_allowed_repositories")
     if not isinstance(allowed, list):
         raise ValueError("Explicit project repository allowlist required")
@@ -236,8 +279,6 @@ def validate_plan(plan, story, policy):
         if selector in paths:
             raise ValueError("Repeated GitHub source")
         paths.add(selector)
-    if not isinstance(policy.get("evidence_linear_workspace"), str):
-        raise ValueError("Linear workspace must be explicitly allowlisted")
     return plan
 
 
@@ -289,6 +330,20 @@ def collect(plan, story, policy, linear, github):
         entries.append(source_entry(
             index, "linear", "https://linear.app/%s/issue/%s" % (workspace, iid),
             issue["updatedAt"], selected["scope"], "ISSUE", "UNVERIFIED", text))
+    original_documents = {}
+    for selected in plan.get("documents", []):
+        did = selected["id"]
+        document = linear.document(did)
+        if document["url"] != selected["url"]:
+            raise ValueError("Linear document URL changed since source selection")
+        original_documents[did] = (document["updatedAt"],
+            digest((document["title"] + "\n" + document["content"]).encode()))
+        text = snippet(document["title"] + "\n\n" + document["content"],
+                       selected["focus"])
+        index += 1
+        entries.append(source_entry(
+            index, "linear", selected["url"], document["updatedAt"],
+            selected["scope"], "DOCUMENT", "UNVERIFIED", text))
     for selected in plan["github"]:
         repo, ref, path = selected["repository"], selected["ref"], selected["path"]
         key = (repo, ref)
@@ -318,6 +373,11 @@ def collect(plan, story, policy, linear, github):
         now = (current["updatedAt"],
                digest((current["title"] + "\n" + current["description"]).encode()))
         changed = changed or old != now
+    for did, old in original_documents.items():
+        doc = linear.document(did)
+        now = (doc["updatedAt"],
+               digest((doc["title"] + "\n" + doc["content"]).encode()))
+        changed = (old != now) or changed
     for (repo, ref), old in branch_heads.items():
         observed = github.commit(repo, ref)
         changed = (observed != old) or changed
