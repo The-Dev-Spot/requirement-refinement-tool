@@ -106,7 +106,7 @@ class GitHubOnlyTests(unittest.TestCase):
         self.assertIn("/blob/"+SHA+"/",packet["sources"][1]["url"])
         self.assertEqual(client.comments_seen,2)
         self.assertEqual(validate_evidence_packet(packet,story(),policy()),packet)
-        self.assertNotIn("linear", canonical(packet).lower())
+        self.assertTrue(all(source["provider"] == "github" for source in packet["sources"]))
         # Even a spotless model result never authorizes Forge.
         result=summarize({"status":"PASS"}, {}, policy(),
                          "fixtures", evidence_packet=packet)
