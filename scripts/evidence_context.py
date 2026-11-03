@@ -22,7 +22,9 @@ AUTHORITY = frozenset(("UNVERIFIED", "CLAIMED_ACTIVE", "DRAFT", "HISTORICAL",
 HEX64 = re.compile(r"[0-9a-f]{64}\Z")
 HEX40 = re.compile(r"[0-9a-f]{40}\Z")
 ID = re.compile(r"S-[0-9]{3}\Z")
-ISSUE = re.compile(r"[A-Z][A-Z0-9]+-[0-9]+\Z")
+ISSUE = re.compile(r"[A-Z][A-Z0-9]+-[0-9]+\\Z")
+GITHUB_ISSUE = re.compile(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+#[1-9][0-9]*\\Z")
+GITHUB_TIME = re.compile(r"\\d{4}-\\d\\d-\\d\\dT\\d\\d:\\d\\d:\\d\\d(?:\\.\\d+)?Z\\Z")
 SCOPE = re.compile(r"[A-Z][A-Z0-9_]{2,63}\Z")
 
 
@@ -39,10 +41,10 @@ def validate_evidence_packet(packet, story, policy):
     """Return the exact validated packet; reject unsupported authority claims."""
     if not isinstance(packet, dict) or set(packet) != PACK_KEYS:
         raise ValueError("Evidence packet has missing or unexpected fields")
-    if packet["schema_version"] != 1 or packet["kind"] != "clarity-context-evidence":
+    if packet["schema_version"] not in (1, 2) or packet["kind"] != "clarity-context-evidence":
         raise ValueError("Unknown evidence context version")
     issue = packet["target_issue"]
-    if not isinstance(issue, str) or not ISSUE.fullmatch(issue):
+    if not isinstance(issue, str) or not (GITHUB_ISSUE if packet["schema_version"] == 2 else ISSUE).fullmatch(issue):
         raise ValueError("Invalid pinned issue ID")
     if isinstance(story.get("source_issue_id"), str) and story["source_issue_id"] != issue:
         raise ValueError("Evidence issue differs from story source")
@@ -71,8 +73,11 @@ def validate_evidence_packet(packet, story, policy):
                    for r in repositories)
             or len(set(repositories)) != len(repositories)):
         raise ValueError("Evidence repository allowlist must be explicit")
-    if not isinstance(workspace, str) or not re.fullmatch(r"[A-Za-z0-9_-]+", workspace):
-        raise ValueError("Evidence Linear workspace allowlist must be explicit")
+    if packet["schema_version"] == 1:
+        if not isinstance(workspace, str) or not re.fullmatch(r"[A-Za-z0-9_-]+", workspace):
+            raise ValueError("Evidence Linear workspace allowlist must be explicit")
+    elif issue.split("#")[0] not in repositories:
+        raise ValueError("GitHub target issue is outside repository allowlist")
     seen = set()
     for source in sources:
         if not isinstance(source, dict) or set(source) != SOURCE_KEYS:
@@ -86,8 +91,8 @@ def validate_evidence_packet(packet, story, policy):
                                       source["provider"])
         if kind not in TYPES or authority not in AUTHORITY:
             raise ValueError("Unsupported source type or authority claim")
-        if provider not in ("linear", "github"):
-            raise ValueError("Evidence provider must be Linear or GitHub")
+        if provider not in ("linear", "github") or (packet["schema_version"] == 2 and provider != "github"):
+            raise ValueError("Evidence v2 supports GitHub sources only")
         excerpt = source["excerpt"]
         if not isinstance(excerpt, str) or not excerpt.strip() or len(excerpt) > 3200:
             raise ValueError("Invalid bounded source excerpt")
@@ -107,22 +112,31 @@ def validate_evidence_packet(packet, story, policy):
                 or len(url) > 750 or not parsed.path.startswith("/")):
             raise ValueError("Untrusted source URL")
         if provider == "github":
-            # Only a commit-pinned GitHub blob is accepted; branch URLs and
-            # arbitrary repository/issue URLs are not suitable for code facts.
-            if parsed.hostname != "github.com" or not HEX40.fullmatch(revision):
-                raise ValueError("GitHub evidence requires a pinned commit")
+            if parsed.hostname != "github.com":
+                raise ValueError("GitHub evidence URL must use github.com")
             bits = parsed.path.strip("/").split("/")
-            if (len(bits) < 5 or bits[2] != "blob" or bits[3] != revision
+            if (len(bits) < 4 or bits[0] + "/" + bits[1] not in repositories
                     or not all(re.fullmatch(r"[A-Za-z0-9._-]+", b) for b in bits)):
-                raise ValueError("GitHub evidence URL is not a commit-pinned file")
-            if bits[0] + "/" + bits[1] not in repositories:
-                raise ValueError("GitHub repository not on trusted allowlist")
-            if parsed.fragment and not re.fullmatch(r"L[0-9]+(?:-L[0-9]+)?", parsed.fragment):
-                raise ValueError("Invalid GitHub line citation")
-            if kind not in ("CODE", "TEST", "DOCUMENT"):
-                raise ValueError("GitHub code excerpts cannot confer decisions")
-            if authority not in ("IMPLEMENTATION", "UNVERIFIED", "HISTORICAL"):
-                raise ValueError("GitHub content cannot ratify policy")
+                raise ValueError("GitHub source is outside allowlisted repository")
+            if packet["schema_version"] == 2 and kind == "ISSUE":
+                if (len(bits) != 4 or bits[2] != "issues"
+                        or not re.fullmatch(r"[1-9][0-9]*", bits[3])
+                        or parsed.fragment
+                        or not GITHUB_TIME.fullmatch(revision)):
+                    raise ValueError("GitHub issue needs a canonical URL and updated_at revision")
+                if authority not in ("UNVERIFIED", "DRAFT", "HISTORICAL"):
+                    raise ValueError("GitHub issue cannot self-ratify policy")
+            else:
+                # Code evidence remains fixed to an exact 40-char commit SHA.
+                if (len(bits) < 5 or bits[2] != "blob"
+                        or not HEX40.fullmatch(revision) or bits[3] != revision):
+                    raise ValueError("GitHub evidence requires a pinned commit")
+                if parsed.fragment and not re.fullmatch(r"L[0-9]+(?:-L[0-9]+)?", parsed.fragment):
+                    raise ValueError("Invalid GitHub line citation")
+                if kind not in ("CODE", "TEST", "DOCUMENT"):
+                    raise ValueError("GitHub code excerpts cannot confer decisions")
+                if authority not in ("IMPLEMENTATION", "UNVERIFIED", "HISTORICAL"):
+                    raise ValueError("GitHub content cannot ratify policy")
         else:
             if parsed.path.strip("/").split("/")[0] != workspace:
                 raise ValueError("Linear workspace not on trusted allowlist")
