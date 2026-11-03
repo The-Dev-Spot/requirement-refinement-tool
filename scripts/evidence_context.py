@@ -113,11 +113,11 @@ def validate_evidence_packet(packet, story, policy):
             raise ValueError("Untrusted source URL")
         if provider == "github":
             if parsed.hostname != "github.com":
-                raise ValueError("GitHub evidence URL must use github.com")
+                raise ValueError("GitHub evidence requires github.com and a pinned commit or issue revision")
             bits = parsed.path.strip("/").split("/")
             if (len(bits) < 4 or bits[0] + "/" + bits[1] not in repositories
                     or not all(re.fullmatch(r"[A-Za-z0-9._-]+", b) for b in bits)):
-                raise ValueError("GitHub source is outside allowlisted repository")
+                raise ValueError("GitHub source is outside trusted allowlist repository")
             if packet["schema_version"] == 2 and kind == "ISSUE":
                 if (len(bits) != 4 or bits[2] != "issues"
                         or not re.fullmatch(r"[1-9][0-9]*", bits[3])
