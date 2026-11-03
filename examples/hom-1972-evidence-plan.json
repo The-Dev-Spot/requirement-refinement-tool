@@ -45,5 +45,13 @@
       "kind": "DOCUMENT",
       "focus": "answer"
     }
+  ],
+  "documents": [
+    {
+      "id": "75bd04a6-f34d-478e-81c8-3ec27b7f66e4",
+      "scope": "PILOT_RC",
+      "focus": "PILOT_RC",
+      "url": "https://linear.app/sashafelix-homelab/document/forge-city-canonical-decision-and-scope-register-v1-2026-11-01-f97f7d002a4d"
+    }
   ]
 }
