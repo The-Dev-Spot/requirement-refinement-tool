@@ -155,7 +155,7 @@ def prepare(story, policy, evidence, *, report=None, story_file_sha=None,
             "EXPLICITLY_CITED" if group["source_ids"] else "NOT_CITED")
     topics = sorted(grouped.values(), key=lambda q: q["topic_id"])
     base.update({
-        "review_status": "REVIEW_QUESTIONS_PROPOSED",
+        "review_status": "REVIEW_QUESTIONS_PROPOSED" if topics else "REVIEW_NO_QUESTIONS",
         "review_gate_status": private_batch["review_gate_status"],
         "review_report_sha256": private_batch["report_sha256"],
         "review_batch_id": private_batch["batch_id"],
