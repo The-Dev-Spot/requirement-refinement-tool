@@ -22,9 +22,9 @@ AUTHORITY = frozenset(("UNVERIFIED", "CLAIMED_ACTIVE", "DRAFT", "HISTORICAL",
 HEX64 = re.compile(r"[0-9a-f]{64}\Z")
 HEX40 = re.compile(r"[0-9a-f]{40}\Z")
 ID = re.compile(r"S-[0-9]{3}\Z")
-ISSUE = re.compile(r"[A-Z][A-Z0-9]+-[0-9]+\\Z")
-GITHUB_ISSUE = re.compile(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+#[1-9][0-9]*\\Z")
-GITHUB_TIME = re.compile(r"\\d{4}-\\d\\d-\\d\\dT\\d\\d:\\d\\d:\\d\\d(?:\\.\\d+)?Z\\Z")
+ISSUE = re.compile(r"[A-Z][A-Z0-9]+-[0-9]+\Z")
+GITHUB_ISSUE = re.compile(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+#[1-9][0-9]*\Z")
+GITHUB_TIME = re.compile(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d+)?Z\Z")
 SCOPE = re.compile(r"[A-Z][A-Z0-9_]{2,63}\Z")
 
 
