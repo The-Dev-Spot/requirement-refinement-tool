@@ -63,7 +63,14 @@ def similar_candidates(groups):
 
 def prepare(story, policy, evidence, *, report=None, story_file_sha=None,
             policy_file_sha=None, evidence_file_sha=None):
-    verify_inputs(story, policy)
+    # A collected issue may have only a synthetic/draft policy (as in the
+    # first R720 smoke test). Permit a *non-authoritative* evidence preview,
+    # but never treat that as a reviewable source or accept reviewer output.
+    try:
+        verify_inputs(story, policy)
+        policy_contract_valid = True
+    except ValueError:
+        policy_contract_valid = False
     validate_evidence_packet(evidence, story, policy)
     if evidence["schema_version"] != 2:
         raise ValueError("Only current GitHub-only v2 evidence is actionable")
@@ -81,8 +88,9 @@ def prepare(story, policy, evidence, *, report=None, story_file_sha=None,
         "policy_sha256": evidence["policy_sha256"],
         "evidence_sha256": hashlib.sha256(canonical(evidence).encode()).hexdigest(),
         "source_status": evidence["freshness"],
-        "policy_adopted_claim": policy["adopted"],
-        "risk_register_status_claim": policy["risk_register_status"],
+        "policy_adopted_claim": policy.get("adopted") is True,
+        "risk_register_status_claim": policy.get("risk_register_status", "UNKNOWN"),
+        "policy_review_contract": "VALID" if policy_contract_valid else "NOT_READY",
         "sources": list(sources.values()),
         "review_status": "NOT_RUN",
         "question_topics": [],
@@ -91,15 +99,18 @@ def prepare(story, policy, evidence, *, report=None, story_file_sha=None,
         "topic_count": 0,
         "requires_authenticated_owner_review": True,
         "source_authority_verified": False,
+        "reviewer_session_authority_verified": False,
         "approval_authority": False,
         "forge_dispatch_authority": False,
         "inbox_import_authority": False,
     }
     if report is None:
         base["next_action"] = (
-            "Collect fresh evidence if changed; otherwise run an independently "
-            "authorized Clarity review before proposing owner questions.")
+            "Draft policy must pass scoped-decision validation before an independently "
+            "authorized Clarity review; changed evidence must first be recollected.")
         return base
+    if not policy_contract_valid:
+        raise ValueError("Completed review cannot be attached to incomplete draft policy")
     if evidence["freshness"] == "SOURCE_CHANGED":
         raise ValueError("Changed GitHub source cannot be attached to review triage")
     if not all(isinstance(x, str) and re.fullmatch(r"[0-9a-f]{64}", x)
