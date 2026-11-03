@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "target_issue": "HOM-1972",
+  "linear": [
+    {
+      "id": "HOM-1972",
+      "scope": "PILOT_RC",
+      "focus": "PILOT_RC"
+    },
+    {
+      "id": "HOM-1973",
+      "scope": "TARGET_CAPACITY",
+      "focus": "TARGET_CAPACITY"
+    },
+    {
+      "id": "HOM-1979",
+      "scope": "TARGET_AUTO",
+      "focus": "TARGET_AUTO"
+    },
+    {
+      "id": "HOM-1982",
+      "scope": "ACCEPTANCE",
+      "focus": "DoR"
+    },
+    {
+      "id": "HOM-1983",
+      "scope": "ACCEPTANCE",
+      "focus": "acceptance"
+    }
+  ],
+  "github": [
+    {
+      "repository": "The-Dev-Spot/homelab",
+      "ref": "main",
+      "path": "stacks/clarity-pilot/README.md",
+      "scope": "PILOT_RC",
+      "kind": "DOCUMENT",
+      "focus": "Clarity"
+    },
+    {
+      "repository": "The-Dev-Spot/homelab",
+      "ref": "main",
+      "path": "stacks/clarity-question-inbox/README.md",
+      "scope": "TARGET_AUTO",
+      "kind": "DOCUMENT",
+      "focus": "answer"
+    }
+  ]
+}
