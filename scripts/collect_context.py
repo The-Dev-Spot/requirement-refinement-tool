@@ -49,6 +49,8 @@ class ReadOnlyHTTP:
         if method not in ("GET", "POST"):
             raise ValueError("Only fixed read-only provider operations are supported")
         parsed = parse.urlsplit(url)
+        if parsed.username or parsed.password or parsed.fragment:
+            raise ValueError("Credential-bearing or fragmented URL is forbidden")
         if parsed.scheme != "https" or parsed.hostname not in (
                 "api.github.com", "api.linear.app") or parsed.port not in (None, 443):
             raise ValueError("External destination forbidden")
@@ -237,7 +239,20 @@ def snippet(text, focus, limit=2900):
     if pos < 0:
         raise ValueError("Approved source focus not found")
     start = max(0, pos - 160)
-    return text[start:start + limit].strip()
+    excerpt = text[start:start + limit].strip()
+    # Stop obvious raw credentials from entering model context. This check is
+    # conservative and NOT a substitute for a trusted secret scanner or
+    # repository classification before model use.
+    forbidden = re.compile(
+        r"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----"
+        r"|github_pat_[A-Za-z0-9_]{20,}"
+        r"|gh[pousr]_[A-Za-z0-9]{20,}"
+        r"|sk-[A-Za-z0-9_-]{32,}"
+        r"|Bearer\\s+[A-Za-z0-9_.-]{30,}",
+        re.IGNORECASE)
+    if forbidden.search(excerpt):
+        raise ValueError("Possible credential in selected source excerpt")
+    return excerpt
 
 
 def source_entry(index, provider, url, revision, scope, kind, claim, text):
@@ -273,7 +288,6 @@ def collect(plan, story, policy, linear, github):
         head = branch_heads[key]
         content = github.file(repo, path, head)
         excerpt = snippet(content, selected["focus"])
-        start = max(1, content.find(excerpt) // max(1, len(content)) + 1)
         # Real line anchors are derived from the text offset, not guessed.
         offset = content.find(excerpt)
         if offset < 0:
