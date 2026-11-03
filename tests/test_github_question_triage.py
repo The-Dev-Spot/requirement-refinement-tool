@@ -94,6 +94,44 @@ class GitHubTriageTest(unittest.TestCase):
                     story_file_sha=hashes[0], policy_file_sha=hashes[1],
                     evidence_file_sha=hashes[2])
 
+    def test_changed_issue_blocks_attached_review(self):
+        s, p = story(), eligible_policy()
+        evidence = collect(plan(), s, p, FakeGitHub(change_on_recheck=True))
+        report, hashes = bound_data(s, p, evidence)
+        self.assertEqual(prepare(s, p, evidence)["source_status"], "SOURCE_CHANGED")
+        with self.assertRaisesRegex(ValueError, "Changed GitHub source"):
+            prepare(s, p, evidence, report=report,
+                    story_file_sha=hashes[0], policy_file_sha=hashes[1],
+                    evidence_file_sha=hashes[2])
+
+    def test_private_cli_without_review_creates_0600_preview(self):
+        s, p = story(), policy()
+        evidence = collect(plan(), s, p, FakeGitHub())
+        with tempfile.TemporaryDirectory() as temp:
+            folder = Path(temp)
+            folder.chmod(0o700)
+            for name, obj in (("story.json", s), ("policy.json", p),
+                              ("evidence.json", evidence)):
+                filename = folder / name
+                filename.write_text(json.dumps(obj))
+                filename.chmod(0o600)
+            output = folder / "preview.json"
+            script = Path(__file__).resolve().parents[1] / "scripts/preview_github_review.py"
+            args = [sys.executable, str(script),
+                    "--story", str(folder / "story.json"),
+                    "--policy", str(folder / "policy.json"),
+                    "--evidence", str(folder / "evidence.json"),
+                    "--output", str(output)]
+            import subprocess
+            import stat
+            done = subprocess.run(args, capture_output=True, text=True, timeout=10)
+            self.assertEqual(done.returncode, 0, done.stderr)
+            self.assertEqual(stat.S_IMODE(output.stat().st_mode), 0o600)
+            self.assertEqual(json.loads(output.read_text())["review_status"], "NOT_RUN")
+            self.assertNotIn("Forge dispatch completed", done.stdout)
+            replay = subprocess.run(args, capture_output=True, text=True, timeout=10)
+            self.assertNotEqual(replay.returncode, 0)
+
 
 if __name__ == "__main__":
     unittest.main()
