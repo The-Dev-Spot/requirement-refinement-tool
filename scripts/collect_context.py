@@ -78,7 +78,11 @@ class ReadOnlyHTTP:
             data = json.loads(raw)
         except (ValueError, UnicodeDecodeError):
             raise ValueError("Provider did not return JSON") from None
-        if not isinstance(data, dict):
+        # GitHub issue-comment collection is the only allowed array response.
+        if not (isinstance(data, dict) or (
+                isinstance(data, list) and method == "GET"
+                and parsed.hostname == "api.github.com"
+                and re.fullmatch(r"/repos/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/issues/[1-9][0-9]*/comments", parsed.path))):
             raise ValueError("Malformed provider response")
         return data
 
