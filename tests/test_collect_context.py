@@ -188,6 +188,13 @@ class CollectorTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 http.json(method, url, {})
 
+    def test_credential_shaped_source_text_is_blocked_before_model_use(self):
+        with self.assertRaisesRegex(ValueError,"Possible credential"):
+            snippet("User sent ghp_" + "A"*32, "")
+        with self.assertRaisesRegex(ValueError,"Possible credential"):
+            snippet("Authorization: Bearer " + "a"*45, "")
+        self.assertIn("credential", snippet("The policy forbids sharing credentials.", ""))
+
     def test_private_key_file_mode_symlinks_and_output_exclusive(self):
         with tempfile.TemporaryDirectory() as temp:
             p=Path(temp)
@@ -197,7 +204,7 @@ class CollectorTests(unittest.TestCase):
             key.chmod(0o600)
             self.assertTrue(read_private_key(key).startswith("test-key"))
             key.chmod(0o644)
-            with self.assertRaisesRegex(ValueError, "owner only"):
+            with self.assertRaisesRegex(ValueError, "owner-only"):
                 read_private_key(key)
             key.chmod(0o600)
             alias=p/"alias"
