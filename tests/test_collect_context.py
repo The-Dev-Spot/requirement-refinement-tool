@@ -195,6 +195,58 @@ class CollectorTests(unittest.TestCase):
             snippet("Authorization: Bearer " + "a"*45, "")
         self.assertIn("credential", snippet("The policy forbids sharing credentials.", ""))
 
+    def test_current_canonical_document_is_read_and_revision_pinned(self):
+        doc_id = "75bd04a6-f34d-478e-81c8-3ec27b7f66e4"
+        doc_url = ("https://linear.app/sashafelix-homelab/document/"
+                   "forge-city-canonical-decision-and-scope-register-v1-2026-11-01-f97f7d002a4d")
+        selection=plan()
+        selection["documents"] = [{
+            "id": doc_id, "url": doc_url, "scope": "PILOT_RC",
+            "focus": "PILOT_RC"
+        }]
+
+        class Documents(FakeLinear):
+            def __init__(self):
+                super().__init__()
+                self.document_calls=0
+
+            def document(self, value):
+                self.document_calls+=1
+                return {"id": value, "url":doc_url,
+                        "title":"Canonical decisions",
+                        "content":"PILOT_RC manually started; TARGET_AUTO future service",
+                        "updatedAt":"2026-11-03T08:10:00Z"}
+
+        linear=Documents()
+        packet=collect(selection,story(),policy(),linear,FakeGitHub())
+        self.assertEqual(linear.document_calls, 2)
+        self.assertEqual(packet["sources"][2]["source_kind"], "DOCUMENT")
+        self.assertEqual(packet["sources"][2]["url"],doc_url)
+        self.assertEqual(packet["sources"][2]["authority_claim"],"UNVERIFIED")
+        self.assertEqual(validate_evidence_packet(packet,story(),policy()),packet)
+
+        selection["documents"][0]["url"] = "https://evil.example/steal"
+        with self.assertRaisesRegex(ValueError,"document selection"):
+            validate_plan(selection,story(),policy())
+
+    def test_linear_document_graphql_partial_or_mismatched_id_is_rejected(self):
+        docid="75bd04a6-f34d-478e-81c8-3ec27b7f66e4"
+        obj={"id":docid,"title":"Documentation","content":"Plan",
+             "updatedAt":"2026-11-03T08:10:00Z",
+             "url":"https://linear.app/sashafelix-homelab/document/example-abc"}
+        http=FakeHTTP({"data":{"document":obj}})
+        document=LinearRead(http,"fake-key").document(docid)
+        self.assertEqual(document["title"],"Documentation")
+        self.assertIn("query ClarityEvidenceDocument",http.calls[0][3]["query"])
+        self.assertNotIn("mutation",http.calls[0][3]["query"].lower())
+        http=FakeHTTP({"data":{"document":dict(obj,id="someone-else")}})
+        with self.assertRaisesRegex(ValueError,"incomplete"):
+            LinearRead(http,"fake-key").document(docid)
+        http=FakeHTTP({"data":{"document":obj},
+                       "errors":[{"message":"permission denied"}]})
+        with self.assertRaisesRegex(ValueError,"partial"):
+            LinearRead(http,"fake-key").document(docid)
+
     def test_private_key_file_mode_symlinks_and_output_exclusive(self):
         with tempfile.TemporaryDirectory() as temp:
             p=Path(temp)
