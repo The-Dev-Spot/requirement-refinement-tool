@@ -147,11 +147,20 @@ class GitHubRead:
 def read_private_key(path):
     """Keys come from private files, never command-line values or code."""
     p = Path(path)
-    if p.is_symlink() or not p.is_file() or p.stat().st_size > 4096:
-        raise ValueError("Credential file must be a small regular private file")
-    if stat.S_IMODE(p.stat().st_mode) & 0o077:
-        raise ValueError("Credential file must be accessible to owner only")
-    value = p.read_text(encoding="ascii").strip()
+    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+    try:
+        fd = os.open(str(p), flags)
+    except OSError:
+        raise ValueError("Credential file must be a regular private file") from None
+    with os.fdopen(fd, "rb") as stream:
+        state = os.fstat(stream.fileno())
+        if (not stat.S_ISREG(state.st_mode) or not 0 < state.st_size <= 4096
+                or stat.S_IMODE(state.st_mode) & 0o077):
+            raise ValueError("Credential file must be a small regular owner-only file")
+        try:
+            value = stream.read(4097).decode("ascii").strip()
+        except UnicodeDecodeError:
+            raise ValueError("Credential file must be ASCII") from None
     if not (20 <= len(value) <= 4096) or any(ch.isspace() for ch in value):
         raise ValueError("Credential file contains invalid value")
     return value
@@ -248,7 +257,7 @@ def snippet(text, focus, limit=2900):
         r"|github_pat_[A-Za-z0-9_]{20,}"
         r"|gh[pousr]_[A-Za-z0-9]{20,}"
         r"|sk-[A-Za-z0-9_-]{32,}"
-        r"|Bearer\\s+[A-Za-z0-9_.-]{30,}",
+        r"|Bearer\s+[A-Za-z0-9_.-]{30,}",
         re.IGNORECASE)
     if forbidden.search(excerpt):
         raise ValueError("Possible credential in selected source excerpt")
@@ -310,7 +319,8 @@ def collect(plan, story, policy, linear, github):
                digest((current["title"] + "\n" + current["description"]).encode()))
         changed = changed or old != now
     for (repo, ref), old in branch_heads.items():
-        changed = changed or github.commit(repo, ref) != old
+        observed = github.commit(repo, ref)
+        changed = (observed != old) or changed
     packet = {
         "schema_version": 1, "kind": "clarity-context-evidence",
         "target_issue": plan["target_issue"],
