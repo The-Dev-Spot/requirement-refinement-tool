@@ -203,6 +203,60 @@ production readiness bypass.**
 
 The report contains input/policy hashes, actual preflight result, invocation IDs and model-provided output/metadata, plus a machine-derived aggregate. It does **not** attest that input policy was approved by a cryptographically verified owner or that model findings were factually correct. These require a trusted supervisor and human adoption before advancing to automatic Forge City dispatch.
 
+## Current operational source: GitHub Issues only (decision 2026-11-03)
+
+**GitHub Issues in the owning repository is the canonical issue intake.**
+Infrastructure, Forge City and shared operations issues live in
+[The-Dev-Spot/homelab](https://github.com/The-Dev-Spot/homelab/issues);
+application-specific issues live in the application's repository.
+Linear is a **personal roadmap and planning backlog**, not an operational
+intake, Clarity evidence provider, or Forge authorization source.
+
+The active collector is scripts/collect_github_context.py. It needs **one**
+dedicated fine-grained GitHub credential with Issues: read and Contents:
+read for only the project repositories being reviewed.
+It supports a bounded explicit issues list (including a fixed optional
+comment history) and a fixed files list of SHA-pinned source files.
+No Linear token or Linear API query belongs in the deployed collector.
+The evidence packet has schema_version 2, using canonical target issue
+IDs of the form owner/repo#number so project issue numbers do not collide.
+An issue's updated_at and selected issue/comment digest are rechecked after
+collection; code files use exact Git commit SHAs. A comment history
+above the configured bound fails closed rather than silently truncating.
+
+Example selection: examples/github-issues-evidence-plan.json targets
+The-Dev-Spot/homelab#169. The story must explicitly declare
+source_issue_id = The-Dev-Spot/homelab#169, review_scope = PLATFORM_CONTROL,
+and required story fields. The working policy must declare the same
+scope and evidence_allowed_repositories = ["The-Dev-Spot/homelab"].
+Actual risk and DoR decisions remain unratified until independently approved.
+Do not copy a historical Linear HOM-1972 story and relabel it as current
+GitHub authority.
+
+~~~bash
+python3 scripts/collect_github_context.py \
+  --plan examples/github-issues-evidence-plan.json \
+  --story /inputs/issue-169.story.json \
+  --policy /inputs/issue-169.policy.json \
+  --github-key-file /secrets/github-read.key \
+  --output /evidence/github-169.evidence.json
+~~~
+
+The collector is read-only: its evidence remains SOURCE_UNVERIFIED or
+SOURCE_CHANGED and cannot grant PASS, move an issue to Forge, create a PR
+or post to Slack. Automatic issue ingestion from apps, monitoring, or Slack
+requires a **separate** GitHub Issues: write integration with validated
+source signatures, idempotent deduplication and durable audit logs.
+That writer credential must never be mounted in the reader container.
+
+The historical Linear-capable collector and v1 packets are retained
+only for archived pilot reproducibility, not enabled in the R720-AI
+operational collector. Linear personal backlog items remain untouched;
+no migration is assumed. Tracking:
+[homelab #169](https://github.com/The-Dev-Spot/homelab/issues/169).
+
+### Historical implementation notes — not for new operational issues
+
 ## Read-only Linear/GitHub source collector (HOM-1989, initial build)
 
 The standalone `scripts/collect_context.py` runs **before** the model

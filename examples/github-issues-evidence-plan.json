@@ -1,0 +1,23 @@
+{
+  "schema_version": 2,
+  "target_issue": "The-Dev-Spot/homelab#169",
+  "issues": [
+    {
+      "repository": "The-Dev-Spot/homelab",
+      "number": 169,
+      "scope": "PLATFORM_CONTROL",
+      "focus": "GitHub",
+      "include_comments": true
+    }
+  ],
+  "files": [
+    {
+      "repository": "The-Dev-Spot/homelab",
+      "ref": "main",
+      "path": "stacks/clarity-context-collector/README.md",
+      "scope": "PLATFORM_CONTROL",
+      "kind": "DOCUMENT",
+      "focus": "evidence"
+    }
+  ]
+}
