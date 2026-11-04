@@ -13,20 +13,20 @@ from collect_context import write_private
 
 
 def inputs():
-    story = {"source_issue_id": "The-Dev-Spot/homelab#37",
-             "review_scope": "MEDIA_UPDATES"}
-    policy = {"review_scope": "MEDIA_UPDATES",
-              "evidence_allowed_repositories": ["The-Dev-Spot/homelab"],
+    story = {"source_issue_id": "example-org/sample-repo#123",
+             "review_scope": "APP_REVIEW"}
+    policy = {"review_scope": "APP_REVIEW",
+              "evidence_allowed_repositories": ["example-org/sample-repo"],
               "adopted": False}
     plan = {
         "schema_version": 1,
         "target_issue": story["source_issue_id"],
-        "review_scope": "MEDIA_UPDATES",
-        "workspace": "sashafelix-homelab",
-        "allowed_issue_prefixes": ["HOM"],
+        "review_scope": "APP_REVIEW",
+        "workspace": "example-workspace",
+        "allowed_issue_prefixes": ["HIST"],
         "historical_issues": [
-            {"id": "HOM-1972", "scope": "MEDIA_UPDATES", "focus": "prior decision"},
-            {"id": "HOM-1973", "scope": "MEDIA_UPDATES", "focus": "prior decision"},
+            {"id": "HIST-101", "scope": "APP_REVIEW", "focus": "prior decision"},
+            {"id": "HIST-102", "scope": "APP_REVIEW", "focus": "prior decision"},
         ],
     }
     return plan, story, policy
@@ -60,9 +60,9 @@ class LinearHistoricalReadTests(unittest.TestCase):
         plan, story, policy = inputs()
         fake = FakeHistory()
         result = collect_history(plan, story, policy, fake)
-        self.assertEqual(fake.calls, ["HOM-1972", "HOM-1973",
-                                      "HOM-1972", "HOM-1973"])
-        self.assertEqual(result["target_issue"], "The-Dev-Spot/homelab#37")
+        self.assertEqual(fake.calls, ["HIST-101", "HIST-102",
+                                      "HIST-101", "HIST-102"])
+        self.assertEqual(result["target_issue"], "example-org/sample-repo#123")
         self.assertEqual(result["status"], "SOURCE_UNVERIFIED")
         self.assertEqual(len(result["historical_sources"]), 2)
         self.assertFalse(result["approval_authority"])
@@ -79,11 +79,11 @@ class LinearHistoricalReadTests(unittest.TestCase):
 
     def test_plan_rejects_linear_target_and_unmapped_github_project(self):
         plan, story, policy = inputs()
-        for target in ["HOM-1972", "The-Dev-Spot/other#37"]:
+        for target in ["HIST-101", "example-org/other-repo#123"]:
             bad = dict(plan, target_issue=target)
             with self.subTest(target=target), self.assertRaises(ValueError):
                 validate_plan(bad, story, policy)
-        policy["evidence_allowed_repositories"] = ["The-Dev-Spot/other"]
+        policy["evidence_allowed_repositories"] = ["example-org/other-repo"]
         with self.assertRaisesRegex(ValueError, "allowlisted"):
             validate_plan(plan, story, policy)
 
@@ -91,10 +91,10 @@ class LinearHistoricalReadTests(unittest.TestCase):
         plan, story, policy = inputs()
         for change in (
             {"allowed_issue_prefixes": ["OPS"]},
-            {"allowed_issue_prefixes": ["HOM", "HOM"]},
-            {"historical_issues": [{"id": "FOO-19", "scope": "MEDIA_UPDATES",
+            {"allowed_issue_prefixes": ["HIST", "HIST"]},
+            {"historical_issues": [{"id": "FOO-19", "scope": "APP_REVIEW",
                                     "focus": "previous work"}]},
-            {"historical_issues": [{"id": "HOM-1972", "scope": "OTHER",
+            {"historical_issues": [{"id": "HIST-101", "scope": "OTHER",
                                     "focus": "prior decision"}]},
             {"historical_issues": plan["historical_issues"] * 7},
             {"review_scope": "OTHER"},
