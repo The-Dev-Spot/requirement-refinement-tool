@@ -32,12 +32,12 @@ There is no organization-wide search, automatic import, or sync.
 ~~~json
 {
   "schema_version": 1,
-  "target_issue": "The-Dev-Spot/homelab#37",
-  "review_scope": "MEDIA_UPDATES",
+  "target_issue": "example-org/sample-repo#123",
+  "review_scope": "APP_REVIEW",
   "workspace": "example-workspace",
-  "allowed_issue_prefixes": ["HOM"],
+  "allowed_issue_prefixes": ["HIST"],
   "historical_issues": [
-    {"id": "HOM-123", "scope": "MEDIA_UPDATES", "focus": "prior decision"}
+    {"id": "HIST-101", "scope": "APP_REVIEW", "focus": "prior decision"}
   ]
 }
 ~~~
@@ -66,8 +66,8 @@ deployment review. No Linear secret should be added to the GitHub collector.
 
 Once an independently verified, bounded historical packet exists,
 the gate should compare it with the current GitHub issue, pinned
-repository implementation, ADRs, PRs and the three reviewers' 27
-candidate questions (the #37 pilot).
+repository implementation, ADRs, PRs and the independent reviewer stages' candidate
+questions for whichever canonical GitHub issue is under review.
 
 A candidate disposition must retain question ID, reviewers, source IDs,
 source timestamps and exact review/input digests:
