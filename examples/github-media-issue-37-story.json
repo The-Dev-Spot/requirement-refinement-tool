@@ -1,0 +1,21 @@
+{
+  "source_issue_id": "The-Dev-Spot/homelab#37",
+  "review_scope": "MEDIA_UPDATES",
+  "title": "Review WUD-reported media container updates and propose safely staged remediation",
+  "story_type": "non-behavioral",
+  "target_format": "markdown",
+  "payload": "Clarity review-only pilot for GitHub issue The-Dev-Spot/homelab#37. Investigate current WUD-reported media image updates using pinned GitHub issue, media Compose files, and service deployment workflow evidence. Distinguish update detection from registry verification and from deployment authorization. The output is an owner-facing, source-cited inventory of update candidates, safety constraints, unresolved facts and required approvals. Never pull or deploy images, modify a GitHub issue, touch secrets or dispatch Forge. The WUD report is time-sensitive and not an authoritative security/compatibility assessment. Any acceptance criteria not supported by source evidence remain open proposals, not approved policy.",
+  "criteria": [
+    "For each image update currently listed in GitHub issue #37, the review records the affected service, the observed running tag or digest, the proposed target tag or digest, and the source revision used.",
+    "The review distinguishes a WUD-reported image change from independent verification of a compatible, permitted target release; unknown digest-to-version mappings remain unresolved.",
+    "The review identifies Plex backup and playback checks as prerequisites for any Plex rollout and does not propose restarting Plex during this review.",
+    "The review recognizes that qBittorrent, ByParr and the port-sync sidecar share Gluetun's network namespace and identifies checks necessary before any VPN-group change.",
+    "The review identifies service-specific deployment workflows, rollback evidence and proxy or monitoring smoke tests for services that do not share the Gluetun network namespace.",
+    "The review produces cited proposed questions and explicit blockers while leaving issue state, running containers, project approval and Forge authorization unchanged."
+  ],
+  "reviewer_constraints": {
+    "allowed": "Read-only GitHub issue and pinned repository evidence; propose questions",
+    "forbidden": "No Docker, pull, deploy, commit, issue edit, approval or Forge execution",
+    "authority": "Draft pilot; owner and source freshness not independently authenticated"
+  }
+}
