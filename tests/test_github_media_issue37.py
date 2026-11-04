@@ -44,7 +44,7 @@ class MediaIssue37PilotTests(unittest.TestCase):
         self.assertEqual(self.story["story_type"], "non-behavioral")
         self.assertGreaterEqual(len(self.story["criteria"]), 3)
         self.assertLessEqual(len(self.story["criteria"]), 8)
-        for rule in ("No Docker", "No bulk", "OWNER_DECISION_REQUIRED"):
+        for rule in ("No Docker", "no bulk", "OWNER_DECISION_REQUIRED"):
             self.assertIn(rule, str(self.story) + str(self.policy))
 
     def test_policy_and_story_must_remain_scope_bound(self):
