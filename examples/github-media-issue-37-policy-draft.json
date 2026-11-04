@@ -1,0 +1,45 @@
+{
+  "project": "Homelab Media Update Review Pilot",
+  "review_scope": "MEDIA_UPDATES",
+  "evidence_allowed_repositories": [
+    "The-Dev-Spot/homelab"
+  ],
+  "adopted": false,
+  "risk_register_status": "DRAFT",
+  "decisions": [],
+  "decision_register": [
+    {
+      "id": "MEDIA_NO_BULK_DEPLOY",
+      "scope": "MEDIA_UPDATES",
+      "status": "ACTIVE",
+      "source": "The-Dev-Spot/homelab/stacks/media/README.md and GitHub issue #37",
+      "revision": "UNVERIFIED: collector pins repository SHA and issue updated_at at run",
+      "authority": "REPOSITORY_CLAIM_NOT_OWNER_RATIFIED",
+      "text": "The current repository describes isolated service deployments. WUD update detection is not a deployment authorization; no bulk pull/recreate or VPN namespace group reconciliation is within this review-only pilot.",
+      "supersedes": []
+    },
+    {
+      "id": "MEDIA_APPROVAL_BOUNDARY",
+      "scope": "MEDIA_UPDATES",
+      "status": "PENDING",
+      "source": "The-Dev-Spot/homelab/issues/37",
+      "revision": "UNVERIFIED: issue state may change during WUD daily reporting",
+      "authority": "OWNER_DECISION_REQUIRED",
+      "text": "The owner has not ratified a per-service approval matrix, maintenance window, rollback threshold, or authority to implement updates; Clarity must request missing decisions rather than infer approval.",
+      "supersedes": []
+    },
+    {
+      "id": "MEDIA_RELEASE_VALIDATION",
+      "scope": "MEDIA_UPDATES",
+      "status": "PENDING",
+      "source": "The-Dev-Spot/homelab/issues/37 and deployed WUD inventory",
+      "revision": "UNVERIFIED: WUD observation must be refreshed against an exact image digest",
+      "authority": "RELEASE_VERIFICATION_REQUIRED",
+      "text": "Each candidate still needs independent target digest/version provenance and suitable backup, isolation and smoke-test validation before release.",
+      "supersedes": []
+    }
+  ],
+  "policy_status": "PROVISIONAL_DRAFT_REVIEW_ONLY",
+  "source_authority_verified": false,
+  "approve_forge": false
+}

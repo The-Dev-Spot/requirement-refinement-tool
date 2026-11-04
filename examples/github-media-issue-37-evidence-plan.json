@@ -1,0 +1,71 @@
+{
+  "schema_version": 2,
+  "target_issue": "The-Dev-Spot/homelab#37",
+  "issues": [
+    {
+      "repository": "The-Dev-Spot/homelab",
+      "number": 37,
+      "scope": "MEDIA_UPDATES",
+      "focus": "WUD",
+      "include_comments": true
+    }
+  ],
+  "files": [
+    {
+      "repository": "The-Dev-Spot/homelab",
+      "ref": "main",
+      "path": "stacks/media/README.md",
+      "scope": "MEDIA_UPDATES",
+      "kind": "DOCUMENT",
+      "focus": "Deployment model"
+    },
+    {
+      "repository": "The-Dev-Spot/homelab",
+      "ref": "main",
+      "path": "stacks/media/docker-compose.yml",
+      "scope": "MEDIA_UPDATES",
+      "kind": "CODE",
+      "focus": "network_mode"
+    },
+    {
+      "repository": "The-Dev-Spot/homelab",
+      "ref": "main",
+      "path": "stacks/media/docker-compose.plex.yml",
+      "scope": "MEDIA_UPDATES",
+      "kind": "CODE",
+      "focus": "plex:"
+    },
+    {
+      "repository": "The-Dev-Spot/homelab",
+      "ref": "main",
+      "path": ".github/workflows/deploy-media.yml",
+      "scope": "MEDIA_UPDATES",
+      "kind": "CODE",
+      "focus": "Gluetun"
+    },
+    {
+      "repository": "The-Dev-Spot/homelab",
+      "ref": "main",
+      "path": ".github/workflows/deploy-plex.yml",
+      "scope": "MEDIA_UPDATES",
+      "kind": "CODE",
+      "focus": "Verify Plex"
+    },
+    {
+      "repository": "The-Dev-Spot/homelab",
+      "ref": "main",
+      "path": ".github/workflows/media-wud-issue-status.yml",
+      "scope": "MEDIA_UPDATES",
+      "kind": "CODE",
+      "focus": "No containers"
+    },
+    {
+      "repository": "The-Dev-Spot/homelab",
+      "ref": "main",
+      "path": "scripts/render-media-wud-report.py",
+      "scope": "MEDIA_UPDATES",
+      "kind": "CODE",
+      "focus": "Hold for separate review"
+    }
+  ]
+}
