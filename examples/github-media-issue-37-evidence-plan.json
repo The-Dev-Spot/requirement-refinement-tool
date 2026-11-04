@@ -57,7 +57,7 @@
       "path": ".github/workflows/media-wud-issue-status.yml",
       "scope": "MEDIA_UPDATES",
       "kind": "CODE",
-      "focus": "No containers"
+      "focus": "Read only WUD inventory through existing Homepage API credential"
     },
     {
       "repository": "The-Dev-Spot/homelab",
