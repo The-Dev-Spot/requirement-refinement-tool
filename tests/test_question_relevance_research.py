@@ -40,8 +40,8 @@ class ResearchProposerTests(unittest.TestCase):
         self.assertEqual(ids, self.ids)
         self.assertIn(self.prev["review_report_sha256"], prompt)
         self.assertIn("pinned_github_excerpts", prompt)
-        self.assertIn("HISTORICAL", prompt)
-        self.assertIn("NO", prompt)
+        self.assertIn("historical Linear item", prompt)
+        self.assertIn("No code runs", prompt)
         self.assertIn("GitHub-only operational intake", prompt)
         self.assertNotIn("github_pat_", prompt)
         with self.assertRaisesRegex(ValueError, "Invalid question range"):
