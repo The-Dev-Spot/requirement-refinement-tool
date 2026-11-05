@@ -95,6 +95,10 @@ jobs:
         run: python -m unittest discover -s tests -p 'test_reconcile_question_evidence.py' -v
       - name: Test authenticated original issue discussion integrity (mocked, no credentials)
         run: python -m unittest discover -s tests -p 'test_github_discussion_snapshot.py' -v
+      - name: Test scoped GitHub ADR and PR research discovery (mocked, no credentials)
+        run: python -m unittest discover -s tests -p 'test_github_research_discovery.py' -v
+      - name: Compile GitHub discovery collector
+        run: python -m py_compile scripts/discover_github_research.py
       - name: Compile trusted reconciliation and collector receipt contract
         run: python -m py_compile scripts/reconcile_question_evidence.py scripts/question_freshness_attestation.py scripts/github_discussion_snapshot.py
       - name: Verify runtime code compiles
