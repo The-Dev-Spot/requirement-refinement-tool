@@ -13,6 +13,7 @@ import json
 from pathlib import Path
 import re
 import sys
+import time
 from urllib.parse import urlsplit
 
 from collect_context import (
@@ -21,6 +22,8 @@ from collect_context import (
 )
 from collect_github_context import GitHubEvidenceClient, issue_text
 from evidence_context import GITHUB_ISSUE, validate_evidence_packet
+from question_freshness_attestation import attest_freshness, read_attestation_key
+from export_review_questions import read_private_report
 
 BRANCH = re.compile(r"[A-Za-z0-9._/-]{1,120}\Z")
 
@@ -124,6 +127,8 @@ def main():
     parser.add_argument("--github-evidence", required=True, type=Path)
     parser.add_argument("--github-key-file", required=True, type=Path)
     parser.add_argument("--output", required=True, type=Path)
+    parser.add_argument("--challenge", type=Path)
+    parser.add_argument("--attestation-key-file", type=Path)
     args = parser.parse_args()
     try:
         story = read_bounded_json(args.story, 250_000)
@@ -131,10 +136,18 @@ def main():
         evidence = read_bounded_json(args.github_evidence, 100_000)
         # Verify approved repo/scope before touching token.
         validate_evidence_packet(evidence, story, policy)
+        if bool(args.challenge) != bool(args.attestation_key_file):
+            raise ValueError("Challenge and separate attestation key must be supplied together")
+        challenge = read_private_report(args.challenge) if args.challenge else None
+        key = read_attestation_key(args.attestation_key_file) if challenge is not None else None
+        challenge_sha = digest(canonical(challenge).encode()) if challenge is not None else None
         github = GitHubFreshnessClient(
             ReadOnlyHTTP(), read_private_key(args.github_key_file))
+        started_at = int(time.time())
         result = recheck(story, policy, evidence, github)
-        write_private(args.output, result)
+        output = (attest_freshness(result, challenge_sha, key, started_at, int(time.time()))
+                  if key is not None else result)
+        write_private(args.output, output)
         print("GitHub snapshot recheck:", result["recheck_status"])
         print("Sources rechecked:", len(result["rechecked_sources"]))
         print("No issue mutation, owner approval, Inbox import or Forge dispatch.")

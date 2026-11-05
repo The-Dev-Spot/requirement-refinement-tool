@@ -299,6 +299,10 @@ def validate_assessments(assessments, research, evidence, history):
                 raise ValueError("Independent citation does not match pinned source")
         proposed = next(x for x in research["proposals"]["decisions"]
                         if x["topic_id"] == tid)
+        if (a["outcome"] == "CONCUR" and a["missing_evidence"].strip()
+                or a["outcome"] == "INSUFFICIENT_EVIDENCE"
+                and not a["missing_evidence"].strip()):
+            raise ValueError("Independent outcome contradicts missing evidence")
         if (a["outcome"] == "CONCUR"
                 and proposed["disposition"] == "ANSWERED_BY_GITHUB_EVIDENCE"
                 and not any(c["source_id"] in {
