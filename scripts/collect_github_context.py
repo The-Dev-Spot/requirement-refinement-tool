@@ -1,4 +1,4 @@
-"""GitHub-only Clarity issue and source context collector (v2).
+"""GitHub-only Clarity context collector (v2 excerpts / v3 discussion binding).
 
 Operational issues are GitHub Issues in their owning project repository.
 Linear is not queried. This one-shot collector is read-only, uses explicit
@@ -18,6 +18,8 @@ from collect_context import (
     read_private_key, snippet, source_entry, valid_path, write_private,
 )
 from evidence_context import GITHUB_ISSUE, HEX40, SCOPE, validate_evidence_packet
+from github_discussion_snapshot import capture_snapshot
+from question_freshness_attestation import read_attestation_key
 
 MAX_SOURCES = 20
 MAX_COMMENTS = 20
@@ -159,8 +161,8 @@ def issue_text(client, selection):
     # arrive during the read. The final collection stage checks once more.
     if selection["include_comments"]:
         after = client.issue(repo, number)
-        if (after["updated_at"] != issue["updated_at"]
-                or after["comments"] != issue["comments"]):
+        if any(after.get(key) != issue.get(key) for key in (
+                "updated_at", "comments", "title", "body", "state")):
             raise ValueError("GitHub issue changed during comment collection")
     text = issue["title"] + "\n\n" + (issue["body"] or "")
     for c in comments:
@@ -168,10 +170,15 @@ def issue_text(client, selection):
                  (c["id"], c["author"], c["updated_at"], c["body"]))
     if len(text.encode("utf-8")) > 120_000:
         raise ValueError("Issue discussion exceeds bounded evidence size")
-    return issue["updated_at"], digest(text.encode()), text
+    # Hash structured records, not the rendered model excerpt. This avoids
+    # ambiguity when issue text contains comment-like delimiters.
+    record = {key: issue.get(key) for key in (
+        "number", "html_url", "title", "body", "updated_at", "state")}
+    record["comments"] = comments
+    return issue["updated_at"], digest(canonical(record).encode()), text
 
 
-def collect(plan, story, policy, github):
+def _collect(plan, story, policy, github):
     validate_plan(plan, story, policy)
     sources, issue_versions, branch_heads = [], {}, {}
     for entry in plan["issues"]:
@@ -222,7 +229,29 @@ def collect(plan, story, policy, github):
         "sources": sources,
     }
     validate_evidence_packet(packet, story, policy)
-    return packet
+    discussions = [{
+        "source_id": source["id"], "url": source["url"],
+        "revision": source["revision"],
+        "discussion_sha256": issue_versions[(entry["repository"], entry["number"])][1],
+    } for entry, source in zip(plan["issues"], sources)]
+    return packet, discussions
+
+
+def collect(plan, story, policy, github):
+    """Legacy excerpt-only collection; cannot establish discussion integrity."""
+    return _collect(plan, story, policy, github)[0]
+
+
+def collect_with_snapshot(plan, story, policy, github, collector_key):
+    validate_plan(plan, story, policy)
+    if any(entry["include_comments"] is not True for entry in plan["issues"]):
+        raise ValueError("Original snapshot requires comments for every selected issue")
+    packet, discussions = _collect(plan, story, policy, github)
+    packet["schema_version"] = 3
+    packet["discussion_snapshot_sha256"] = digest(canonical(discussions).encode())
+    validate_evidence_packet(packet, story, policy)
+    # Changed collection fails rather than signing a seemingly coherent snapshot.
+    return packet, capture_snapshot(packet, discussions, collector_key)
 
 
 def main():
@@ -232,16 +261,28 @@ def main():
     parser.add_argument("--policy", required=True, type=Path)
     parser.add_argument("--github-key-file", required=True, type=Path)
     parser.add_argument("--output", required=True, type=Path)
+    parser.add_argument("--snapshot-output", type=Path)
+    parser.add_argument("--attestation-key-file", type=Path)
     args = parser.parse_args()
     try:
         plan = read_bounded_json(args.plan, 12_000)
         story = read_bounded_json(args.story, 250_000)
         policy = read_bounded_json(args.policy, 100_000)
         validate_plan(plan, story, policy)
+        if bool(args.snapshot_output) != bool(args.attestation_key_file):
+            raise ValueError("Snapshot output and collector attestation key must be paired")
+        if args.snapshot_output and any(item["include_comments"] is not True for item in plan["issues"]):
+            raise ValueError("Original snapshot requires comments for every selected issue")
+        key = read_attestation_key(args.attestation_key_file) if args.snapshot_output else None
         github = GitHubEvidenceClient(ReadOnlyHTTP(),
                                       read_private_key(args.github_key_file))
-        packet = collect(plan, story, policy, github)
+        if key is not None:
+            packet, snapshot = collect_with_snapshot(plan, story, policy, github, key)
+        else:
+            packet = collect(plan, story, policy, github)
         write_private(args.output, packet)
+        if key is not None:
+            write_private(args.snapshot_output, snapshot)
         print("GitHub evidence: %d citations, status=%s, sha256=%s" %
               (len(packet["sources"]), packet["freshness"],
                digest(canonical(packet).encode())))

@@ -9,7 +9,7 @@ This is NOT a replacement for the reviewer/acceptance gate.
 
 ## What it checks
 
-- Revalidates the original GitHub-only v2 evidence against the exact
+- Revalidates the original GitHub-only v2/v3 evidence against the exact
   story/policy scope and repository allowlist before reading credentials.
 - Uses only a restricted **GitHub read** credential in a collector context.
 - For each GitHub Issue source, re-reads the complete issue discussion
@@ -22,6 +22,9 @@ This is NOT a replacement for the reviewer/acceptance gate.
   even when the old pinned file remains available.
 - Rechecks issue contents and default-branch HEAD once again after the
   initial pass to detect changes during the verification window.
+- For v3 evidence, verifies the authenticated original discussion snapshot
+  and compares complete structured issue/comment digests, including uncited
+  comments. Changes at unchanged issue timestamps still block.
 
 It writes an immutable, private, mode-0600 JSON receipt with per-source
 statuses, the original evidence hash and one of:
@@ -45,9 +48,11 @@ environment. It must not be run inside the Claude reviewer/researcher
 container, which should have **no GitHub credential or API access**.
 
 The [offline trusted reconciler](question-evidence-reconciliation.md) requires
-an authenticated receipt bound to the exact challenge, using the optional paired
-`--challenge` and `--attestation-key-file` arguments. Unsigned receipts remain
-diagnostic only. This adds no acceptance or semantic authority; sources must
+an authenticated receipt bound to the exact challenge and original snapshot,
+using the optional grouped `--challenge`, `--discussion-snapshot` and
+`--attestation-key-file` arguments with v3 evidence. Unsigned/v2 receipts remain
+diagnostic only; trusted reconciliation requires fresh v3 collection before
+review. This adds no acceptance or semantic authority; sources must
 be rechecked again before any separately authorized downstream operation.
 If a current issue or branch changed, the right result is **recollect
 and re-review**, not to assume an old decision still applies.

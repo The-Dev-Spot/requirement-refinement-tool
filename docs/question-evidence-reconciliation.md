@@ -34,10 +34,12 @@ Freshness is limited to the recorded read interval. The default allowed age is
 300 seconds from the **start** of collection; trusted operator configuration
 can select 1–900 seconds. A new reconciliation or downstream operation must
 check freshness again. The stored report is not a reusable authorization token.
-Issue checks establish `updated_at` and excerpt presence, plus consistency of
-bounded discussion during the read. The existing packet does not retain a full
-original discussion digest, so this does not establish that every uncited
-comment is unchanged since original collection. Repository checks conservatively
+Trusted reconciliation now requires **v3 evidence** and the authenticated
+original [discussion snapshot](github-discussion-snapshot.md). It checks the
+complete bounded discussion against the digest captured before review, including
+uncited comments. Legacy v2 excerpts/readbacks remain diagnostic only and must
+be recollected and re-reviewed; a snapshot cannot be retrofitted after review.
+Repository checks conservatively
 require the original pinned commit to remain the actual default-branch HEAD.
 
 ## Replay and result
@@ -79,8 +81,10 @@ Inbox import and Forge dispatch authority remain false.
 
 ## Future authorized invocation (not executed or deployed)
 
-First, the separately authorized collector rechecks sources after the challenge
-already exists. This command makes GitHub reads, with no model use:
+First, collect v3 evidence and its original snapshot **before** the review using
+the [snapshot collection command](github-discussion-snapshot.md). After the
+separately authorized review/research/challenge, the collector rechecks sources.
+This command makes GitHub reads, with no model use:
 
 ~~~sh
 python3 scripts/recheck_github_sources.py \
@@ -88,6 +92,7 @@ python3 scripts/recheck_github_sources.py \
   --github-evidence /private/github.json \
   --github-key-file /private/secrets/github-read.key \
   --challenge /private/challenge.json \
+  --discussion-snapshot /private/original-discussions.json \
   --attestation-key-file /private/secrets/collector-attestation.key \
   --output /private/freshness-unique.json
 ~~~
@@ -100,6 +105,7 @@ python3 scripts/reconcile_question_evidence.py \
   --github-evidence /private/github.json --review /private/review.json \
   --preview /private/preview.json --research /private/research.json \
   --challenge /private/challenge.json --freshness /private/freshness-unique.json \
+  --discussion-snapshot /private/original-discussions.json \
   --collector-key-file /private/secrets/collector-attestation.key \
   --max-age-seconds 300 --output /private/reconciliation-unique.json
 ~~~

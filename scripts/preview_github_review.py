@@ -72,8 +72,8 @@ def prepare(story, policy, evidence, *, report=None, story_file_sha=None,
     except ValueError:
         policy_contract_valid = False
     validate_evidence_packet(evidence, story, policy)
-    if evidence["schema_version"] != 2:
-        raise ValueError("Only current GitHub-only v2 evidence is actionable")
+    if evidence["schema_version"] not in (2, 3):
+        raise ValueError("Only current GitHub-only v2/v3 evidence is actionable")
     sources = {
         s["id"]: {"id": s["id"], "url": s["url"], "revision": s["revision"],
                   "source_kind": s["source_kind"], "scope": s["scope"]}

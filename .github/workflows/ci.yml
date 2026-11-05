@@ -89,7 +89,9 @@ jobs:
         run: python -m unittest discover -s tests -p 'test_benchmark_review_consistency.py' -v
       - name: Test trusted question evidence reconciliation (offline, synthetic keys only)
         run: python -m unittest discover -s tests -p 'test_reconcile_question_evidence.py' -v
+      - name: Test authenticated original issue discussion integrity (mocked, no credentials)
+        run: python -m unittest discover -s tests -p 'test_github_discussion_snapshot.py' -v
       - name: Compile trusted reconciliation and collector receipt contract
-        run: python -m py_compile scripts/reconcile_question_evidence.py scripts/question_freshness_attestation.py
+        run: python -m py_compile scripts/reconcile_question_evidence.py scripts/question_freshness_attestation.py scripts/github_discussion_snapshot.py
       - name: Verify runtime code compiles
         run: python -m py_compile scripts/quality_review.py scripts/evidence_context.py scripts/collect_context.py scripts/collect_github_context.py scripts/collect_linear_history.py scripts/preview_github_review.py scripts/question_relevance_gate.py scripts/question_relevance_research.py scripts/question_relevance_verify.py scripts/recheck_github_sources.py scripts/decision_scopes.py scripts/export_review_questions.py scripts/accept_requirements.py scripts/benchmark_review_consistency.py
