@@ -13,21 +13,55 @@ from evidence_context import canonical, digest
 from question_freshness_attestation import attest_freshness, read_attestation_key
 from question_relevance_research import build_prompt, research
 from question_relevance_verify import build_challenge_prompt, challenge
+from collect_github_context import collect_with_snapshot
+from preview_github_review import prepare
+from test_github_context import plan, FakeGitHub
 from reconcile_question_evidence import main, reconcile
 from recheck_github_sources import recheck, main as recheck_main
 import test_question_relevance_verify as fixtures
 from test_recheck_github_sources import FakeFreshGitHub
+
+
+def with_discussion_snapshot(fixture, key):
+    """Rebind synthetic model artifacts to evidence containing original digests."""
+    old_preview = fixture.prev
+    decisions = copy.deepcopy(fixture.research_result["proposals"]["decisions"])
+    fixture.e, snapshot = collect_with_snapshot(plan(), fixture.s, fixture.p, FakeGitHub(), key)
+    fixture.hashes = tuple(digest(json.dumps(x, sort_keys=True).encode())
+                           for x in (fixture.s, fixture.p, fixture.e))
+    fixture.report["evidence_file_sha256"] = fixture.hashes[2]
+    fixture.prev = prepare(fixture.s, fixture.p, fixture.e, report=fixture.report,
+                           story_file_sha=fixture.hashes[0], policy_file_sha=fixture.hashes[1],
+                           evidence_file_sha=fixture.hashes[2])
+    by_question = {t["question"]: t["topic_id"] for t in fixture.prev["question_topics"]}
+    ids = {t["topic_id"]: by_question[t["question"]] for t in old_preview["question_topics"]}
+    for field in ("doc_id", "approval_id", "other_id"):
+        setattr(fixture, field, ids[getattr(fixture, field)])
+    for decision in decisions:
+        decision["topic_id"] = ids[decision["topic_id"]]
+        if decision["duplicate_of"]:
+            decision["duplicate_of"] = ids[decision["duplicate_of"]]
+    for assessment in fixture.assessments:
+        assessment["topic_id"] = ids[assessment["topic_id"]]
+    prompt, _ = build_prompt(fixture.prev, fixture.e, None, count=3)
+    receipt = dict(fixture.research_result["receipt"], prompt_sha256=digest(prompt.encode()))
+    with patch("question_relevance_research.run_claude_research", return_value=(decisions, receipt)):
+        fixture.research_result = research(fixture.s, fixture.p, fixture.e, fixture.report,
+                                           fixture.prev, fixture.hashes, count=3, provider="claude")
+    return snapshot
 
 class ReconciliationTests(unittest.TestCase):
     def setUp(self):
         self.f = fixtures.IndependentQuestionChallengeTests()
         self.f.setUp()
         self.key = b"synthetic-collector-key-for-unit-tests-only"
+        self.snapshot = with_discussion_snapshot(self.f, self.key)
         self.now = 1000
         self.history = None
         self.r = self.f.research_result
         self.make_challenge()
-        self.readback = recheck(self.f.s, self.f.p, self.f.e, FakeFreshGitHub())
+        self.readback = recheck(self.f.s, self.f.p, self.f.e, FakeFreshGitHub(),
+                                discussion_snapshot=self.snapshot, collector_key=self.key)
         self.sign()
 
     def make_challenge(self):
@@ -43,7 +77,7 @@ class ReconciliationTests(unittest.TestCase):
                                      self.key, 990, 995)
 
     def run_reconcile(self, **kwargs):
-        values = dict(history=self.history, now=self.now)
+        values = dict(history=self.history, now=self.now, discussion_snapshot=self.snapshot)
         values.update(kwargs)
         with patch("subprocess.run", side_effect=AssertionError("No process/model allowed")):
             return reconcile(self.f.s, self.f.p, self.f.e, self.f.report,
@@ -193,7 +227,8 @@ class ReconciliationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)
             values = {"story": self.f.s, "policy": self.f.p,
-                      "github-evidence": self.f.e, "challenge": self.c}
+                      "github-evidence": self.f.e, "challenge": self.c,
+                      "discussion-snapshot": self.snapshot}
             argv = ["recheck"]
             for name, value in values.items():
                 path = root / (name + ".json")
@@ -230,7 +265,7 @@ class ReconciliationTests(unittest.TestCase):
             output = root / "out.json"
             argv = ["reconcile"]
             for name in ("story", "policy", "github-evidence", "review", "preview", "research",
-                         "challenge", "freshness", "collector-key-file"):
+                         "challenge", "freshness", "collector-key-file", "discussion-snapshot"):
                 argv += ["--" + name, str(bad)]
             argv += ["--output", str(output)]
             with patch("sys.argv", argv):
@@ -242,7 +277,8 @@ class ReconciliationTests(unittest.TestCase):
             root = Path(folder)
             values = {"story": self.f.s, "policy": self.f.p, "github-evidence": self.f.e,
                       "review": self.f.report, "preview": self.f.prev, "research": self.r,
-                      "challenge": self.c, "freshness": self.fresh}
+                      "challenge": self.c, "freshness": self.fresh,
+                      "discussion-snapshot": self.snapshot}
             argv = ["reconcile"]
             for name, value in values.items():
                 path = root / (name + ".json")

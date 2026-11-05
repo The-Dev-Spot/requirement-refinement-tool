@@ -15,6 +15,7 @@ from evidence_context import canonical, digest
 from export_review_questions import read_private_report
 from quality_review import model_matches, write_private_report
 from question_freshness_attestation import read_attestation_key, verify_freshness
+from github_discussion_snapshot import validate_snapshot
 from question_relevance_verify import (
     OUTCOMES, build_challenge_prompt, validate_assessments, validate_research,
 )
@@ -78,14 +79,16 @@ def validate_challenge(challenge, research, evidence, report, preview, history):
     return {a["topic_id"]: a for a in assessments}
 
 
-def validate_readback(readback, evidence):
+def validate_readback(readback, evidence, discussion_snapshot, collector_key):
+    originals = validate_snapshot(discussion_snapshot, evidence, collector_key)
     expected = {
         "schema_version", "kind", "target_issue", "review_scope", "evidence_sha256",
         "story_sha256", "policy_sha256", "recheck_status", "rechecked_sources",
         "github_network_rechecked", *READBACK_FALSE,
+        "original_discussion_receipt_sha256", "discussion_integrity_status", "rechecked_discussions",
     }
     if (not isinstance(readback, dict) or set(readback) != expected
-            or type(readback["schema_version"]) is not int or readback["schema_version"] != 1
+            or type(readback["schema_version"]) is not int or readback["schema_version"] != 2
             or readback["kind"] != "clarity-github-source-freshness-recheck"
             or readback["target_issue"] != evidence["target_issue"]
             or readback["review_scope"] != evidence["review_scope"]
@@ -94,8 +97,16 @@ def validate_readback(readback, evidence):
             or readback["policy_sha256"] != evidence["policy_sha256"]
             or readback["github_network_rechecked"] is not True
             or readback["recheck_status"] != "MATCHED_AT_READ_TIME"
+            or readback["discussion_integrity_status"] != "MATCHED_AT_READ_TIME"
+            or readback["original_discussion_receipt_sha256"] != digest(canonical(discussion_snapshot).encode())
             or any(readback[x] is not False for x in READBACK_FALSE)):
         raise ValueError("Collector did not establish matching source readback")
+    expected_discussions = [{
+        "source_id": sid, "claimed_sha256": item["discussion_sha256"],
+        "observed_sha256": item["discussion_sha256"], "status": "MATCHED",
+    } for sid, item in originals.items()]
+    if canonical(readback["rechecked_discussions"]) != canonical(expected_discussions):
+        raise ValueError("Readback must cover every original full discussion once")
     expected_sources = [{
         "source_id": s["id"], "source_kind": s["source_kind"],
         "claimed_revision": s["revision"], "observed_revision": s["revision"],
@@ -114,13 +125,13 @@ def validate_readback(readback, evidence):
 
 def reconcile(story, policy, evidence, report, preview, hashes, research,
               challenge, freshness, collector_key, *, history=None,
-              now=None, max_age_seconds=300):
+              discussion_snapshot=None, now=None, max_age_seconds=300):
     candidate = validate_research(story, policy, evidence, report, preview, hashes,
                                   research, history=history)
     assessments = validate_challenge(challenge, research, evidence, report, preview, history)
     readback = verify_freshness(freshness, challenge, collector_key,
                                now=now, max_age_seconds=max_age_seconds)
-    validate_readback(readback, evidence)
+    validate_readback(readback, evidence, discussion_snapshot, collector_key)
     topics = []
     for original in candidate["topics"]:
         item = dict(original)
@@ -145,13 +156,15 @@ def reconcile(story, policy, evidence, report, preview, hashes, research,
             index[item["duplicate_of"]]["reconciliation_status"]
             if item["duplicate_of"] else None)
     return {
-        "schema_version": 1, "kind": "clarity-question-evidence-reconciliation",
+        "schema_version": 2, "kind": "clarity-question-evidence-reconciliation",
         "target_issue": preview["target_issue"], "review_scope": preview["review_scope"],
         "status": "BLOCKED", "source_status": "AUTHENTICATED_MATCH_AT_READ_TIME",
         "bindings": {name: digest(canonical(value).encode()) for name, value in (
             ("story", story), ("policy", policy), ("evidence", evidence), ("review", report),
             ("preview", preview), ("research", research), ("challenge", challenge),
             ("freshness", freshness), ("linear_history", history))},
+        "original_discussion_receipt_sha256": digest(canonical(discussion_snapshot).encode()),
+        "discussion_integrity_status": "AUTHENTICATED_MATCH_AT_READ_TIME",
         "source_read_started_at": freshness["payload"]["started_at"],
         "source_read_completed_at": freshness["payload"]["completed_at"],
         "source_receipt_max_age_seconds": max_age_seconds,
@@ -175,6 +188,7 @@ def main():
     for name in ("story", "policy", "github-evidence", "review", "preview", "research",
                  "challenge", "freshness", "collector-key-file", "output"):
         p.add_argument("--" + name, required=True, type=Path)
+    p.add_argument("--discussion-snapshot", required=True, type=Path)
     p.add_argument("--linear-history", type=Path)
     p.add_argument("--max-age-seconds", type=int, default=300)
     args = p.parse_args()
@@ -185,8 +199,10 @@ def main():
         inputs = [read_private_report(path) for path in paths]
         hashes = tuple(digest(path.read_bytes()) for path in paths[:3])
         history = read_private_report(args.linear_history) if args.linear_history else None
+        snapshot = read_private_report(args.discussion_snapshot)
         result = reconcile(*inputs[:5], hashes, *inputs[5:],
                            read_attestation_key(args.collector_key_file), history=history,
+                           discussion_snapshot=snapshot,
                            max_age_seconds=args.max_age_seconds)
         write_private_report(args.output, result)
         print("BLOCKED: reconciled %d unresolved question topics; no approval or Forge dispatch."

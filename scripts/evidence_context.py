@@ -39,12 +39,19 @@ def digest(data):
 
 def validate_evidence_packet(packet, story, policy):
     """Return the exact validated packet; reject unsupported authority claims."""
-    if not isinstance(packet, dict) or set(packet) != PACK_KEYS:
+    expected_keys = PACK_KEYS | ({"discussion_snapshot_sha256"}
+                                if isinstance(packet, dict) and packet.get("schema_version") == 3 else set())
+    if not isinstance(packet, dict) or set(packet) != expected_keys:
         raise ValueError("Evidence packet has missing or unexpected fields")
-    if packet["schema_version"] not in (1, 2) or packet["kind"] != "clarity-context-evidence":
+    if (type(packet["schema_version"]) is not int or packet["schema_version"] not in (1, 2, 3)
+            or packet["kind"] != "clarity-context-evidence"):
         raise ValueError("Unknown evidence context version")
+    if packet["schema_version"] == 3 and (
+            not isinstance(packet["discussion_snapshot_sha256"], str)
+            or not HEX64.fullmatch(packet["discussion_snapshot_sha256"])):
+        raise ValueError("Discussion snapshot digest required for GitHub v3 evidence")
     issue = packet["target_issue"]
-    if not isinstance(issue, str) or not (GITHUB_ISSUE if packet["schema_version"] == 2 else ISSUE).fullmatch(issue):
+    if not isinstance(issue, str) or not (GITHUB_ISSUE if packet["schema_version"] >= 2 else ISSUE).fullmatch(issue):
         raise ValueError("Invalid pinned issue ID")
     if isinstance(story.get("source_issue_id"), str) and story["source_issue_id"] != issue:
         raise ValueError("Evidence issue differs from story source")
@@ -91,8 +98,8 @@ def validate_evidence_packet(packet, story, policy):
                                       source["provider"])
         if kind not in TYPES or authority not in AUTHORITY:
             raise ValueError("Unsupported source type or authority claim")
-        if provider not in ("linear", "github") or (packet["schema_version"] == 2 and provider != "github"):
-            raise ValueError("Evidence v2 supports GitHub sources only")
+        if provider not in ("linear", "github") or (packet["schema_version"] >= 2 and provider != "github"):
+            raise ValueError("Evidence v2/v3 supports GitHub sources only")
         excerpt = source["excerpt"]
         if not isinstance(excerpt, str) or not excerpt.strip() or len(excerpt) > 3200:
             raise ValueError("Invalid bounded source excerpt")
@@ -118,7 +125,7 @@ def validate_evidence_packet(packet, story, policy):
             if (len(bits) < 4 or bits[0] + "/" + bits[1] not in repositories
                     or not all(re.fullmatch(r"[A-Za-z0-9._-]+", b) for b in bits)):
                 raise ValueError("GitHub source is outside trusted allowlist repository")
-            if packet["schema_version"] == 2 and kind == "ISSUE":
+            if packet["schema_version"] >= 2 and kind == "ISSUE":
                 if (len(bits) != 4 or bits[2] != "issues"
                         or not re.fullmatch(r"[1-9][0-9]*", bits[3])
                         or parsed.fragment
