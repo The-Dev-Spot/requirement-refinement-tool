@@ -107,26 +107,22 @@ class IndependentQuestionChallengeTests(unittest.TestCase):
         self.assertEqual(result["counts"]["DUPLICATE_OF"], 1)
 
     def test_forged_identity_source_and_batch_are_rejected(self):
-        def modified(*keys):
-            data = copy.deepcopy(self.research_result)
-            obj = data
-            for k in keys[:-1]:
-                obj = obj[k]
-            return data, obj, keys[-1]
-        data, obj, key = modified("receipt", "prompt_sha256")
-        obj[key] = "a" * 64
+        data = copy.deepcopy(self.research_result)
+        data["receipt"]["prompt_sha256"] = "a" * 64
         with self.assertRaisesRegex(ValueError, "exact prompt"):
             self.verify(data)
-        data, obj, key = modified("batch_topic_ids")
-        obj.reverse()
+        data = copy.deepcopy(self.research_result)
+        data["batch_topic_ids"].reverse()
         with self.assertRaisesRegex(ValueError, "original question order"):
             self.verify(data)
-        data, obj, key = modified("proposals", "decisions")
-        obj.pop()
+        data = copy.deepcopy(self.research_result)
+        data["proposals"]["decisions"].pop()
         with self.assertRaisesRegex(ValueError, "omitted or injected"):
             self.verify(data)
-        data, obj, key = modified("proposals", "decisions")
-        obj[0]["evidence"][0]["quote"] = "A fake assertion not in this GitHub file."
+        data = copy.deepcopy(self.research_result)
+        fact = next(x for x in data["proposals"]["decisions"]
+                    if x["topic_id"] == self.doc_id)
+        fact["evidence"][0]["quote"] = "A fake assertion not in this GitHub file."
         with self.assertRaisesRegex(ValueError, "quote not present"):
             self.verify(data)
 
@@ -139,7 +135,6 @@ class IndependentQuestionChallengeTests(unittest.TestCase):
         self.assertIn("source excerpts", prompt)
         self.assertIn(self.approval_id, prompt)
         self.assertIn(self.owner["rationale"], prompt)
-        self.assertIn("ZERO", prompt.upper()) if False else None
         self.assertLess(len(prompt.encode()), 120001)
 
     def test_valid_challenge_preserves_no_authority(self):
