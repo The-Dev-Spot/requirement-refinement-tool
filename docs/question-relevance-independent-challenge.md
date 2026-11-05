@@ -23,6 +23,9 @@ not a work queue, current-policy approval, or a Forge dispatch trigger.
    model/session receipt and status per topic.
 
 The outcomes are **CONCUR**, **DISPUTE**, and **INSUFFICIENT_EVIDENCE**.
+`CONCUR` must not assert missing evidence; `INSUFFICIENT_EVIDENCE` must state
+what is missing. The [offline reconciliation report](question-evidence-reconciliation.md)
+replays the challenge and authenticates the separately collected source readback.
 They indicate a second model's opinion only. In particular, **CONCUR
 does not mean the underlying source was refreshed, that the cited sentence
 suffices as proof, or that any human decision was ratified**.

@@ -44,8 +44,11 @@ The tool is intended for a separately reviewed read-only GitHub collector
 environment. It must not be run inside the Claude reviewer/researcher
 container, which should have **no GitHub credential or API access**.
 
-Future trusted reconciliation will need to bind this receipt to the exact
-research/challenger artifacts and recheck again before issuing acceptance.
+The [offline trusted reconciler](question-evidence-reconciliation.md) requires
+an authenticated receipt bound to the exact challenge, using the optional paired
+`--challenge` and `--attestation-key-file` arguments. Unsigned receipts remain
+diagnostic only. This adds no acceptance or semantic authority; sources must
+be rechecked again before any separately authorized downstream operation.
 If a current issue or branch changed, the right result is **recollect
 and re-review**, not to assume an old decision still applies.
 
