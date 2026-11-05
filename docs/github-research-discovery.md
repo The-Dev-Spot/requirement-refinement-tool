@@ -49,9 +49,10 @@ Source text is data and cannot authorize commands or modify the review contract.
 
 This format is deliberately distinct from a Clarity evidence packet. It cannot
 be passed to the reviewer, relevance gate, trusted reconciler or Inbox importer.
-Select relevant document paths into a fresh authorized GitHub collection plan,
-then collect the source-bound evidence and original discussion snapshot before
-review. PR candidates need a separate provenance/freshness adapter before they
+Use the [explicit document-selection adapter](discovery-selection-offline-pilot.md)
+to select candidate IDs, validate the discovery/source bindings and collect fresh
+source-bound evidence plus the original discussion snapshot before review.
+PR candidates need a separate provenance/freshness adapter before they
 can be used by the question research stages. No candidate is auto-imported.
 Linear remains separate read-only historical context; it never becomes intake.
 
