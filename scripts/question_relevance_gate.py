@@ -19,6 +19,8 @@ from evidence_context import GITHUB_ISSUE, canonical, digest, validate_evidence_
 from export_review_questions import read_private_report
 from preview_github_review import prepare
 from quality_review import write_private_report
+from linear_history_details import history_source_index, validate_context, valid_time
+from collect_linear_history import validate_plan as validate_history_plan
 
 ID = re.compile(r"topic-[0-9a-f]{20}\Z")
 SHA = re.compile(r"[0-9a-f]{64}\Z")
@@ -45,9 +47,12 @@ def validate_history(history, story, policy):
         "historical_sources", "approval_authority", "issue_intake_authority",
         "forge_dispatch_authority", "current_policy_authority",
     }
+    version = history.get("schema_version") if isinstance(history, dict) else None
+    if version == 2:
+        expected.add("selection")
     if not isinstance(history, dict) or set(history) != expected:
         raise ValueError("Historical evidence contract differs")
-    if (type(history["schema_version"]) is not int or history["schema_version"] != 1
+    if (type(history["schema_version"]) is not int or version not in (1, 2)
             or history["kind"] != "clarity-linear-history-context"
             or history["target_issue"] != story.get("source_issue_id")
             or not GITHUB_ISSUE.fullmatch(history["target_issue"])
@@ -59,6 +64,13 @@ def validate_history(history, story, policy):
             or not SHA.fullmatch(history["selection_sha256"])
             or history["status"] != "SOURCE_UNVERIFIED"):
         raise ValueError("Historical packet is not bound to current GitHub review")
+    if len(canonical(history).encode()) > 90_000:
+        raise ValueError("Historical packet exceeds safe size")
+    if version == 2:
+        validate_history_plan(history["selection"], story, policy)
+        if (history["selection"]["schema_version"] != 2
+                or history["selection_sha256"] != digest(canonical(history["selection"]).encode())):
+            raise ValueError("Detailed historical selection digest differs")
     if any(history.get(flag) is not False for flag in (
             "approval_authority", "issue_intake_authority",
             "forge_dispatch_authority", "current_policy_authority")):
@@ -67,12 +79,17 @@ def validate_history(history, story, policy):
     if not isinstance(sources, list) or not 1 <= len(sources) <= MAX_HISTORY:
         raise ValueError("Historical sources not bounded")
     seen = set()
-    for s in sources:
-        if not isinstance(s, dict) or set(s) != {
+    if version == 2 and len(sources) != len(history["selection"]["historical_issues"]):
+        raise ValueError("Detailed history omitted a selected issue")
+    for number, s in enumerate(sources):
+        fields = {
             "id", "provider", "source_kind", "source_issue_id", "url",
             "revision", "scope", "project_mapping", "authority",
             "excerpt", "excerpt_sha256",
-        }:
+        }
+        if version == 2:
+            fields.add("history_context")
+        if not isinstance(s, dict) or set(s) != fields:
             raise ValueError("Invalid historical source shape")
         ref = s["id"]
         if not isinstance(ref, str) or not HIST_ID.fullmatch(ref) or ref in seen:
@@ -83,7 +100,8 @@ def validate_history(history, story, policy):
         if (s["provider"] != "linear"
                 or s["source_kind"] != "HISTORICAL_ISSUE"
                 or s["authority"] != "HISTORICAL_UNVERIFIED"
-                or s["project_mapping"] != "OPERATOR_SELECTED_UNVERIFIED"
+                or s["project_mapping"] != ("API_IDS_MATCH_OPERATOR_SELECTION"
+                                             if version == 2 else "OPERATOR_SELECTED_UNVERIFIED")
                 or s["scope"] != history["review_scope"]
                 or not isinstance(issue_id, str)
                 or not re.fullmatch(r"[A-Z][A-Z0-9]+-[1-9][0-9]*", issue_id)
@@ -97,7 +115,15 @@ def validate_history(history, story, policy):
                 or not isinstance(s["excerpt_sha256"], str)
                 or digest(s["excerpt"].encode()) != s["excerpt_sha256"]):
             raise ValueError("Historical source content or provenance invalid")
-    return {item["id"]: item for item in sources}
+        if version == 2:
+            selection = history["selection"]["historical_issues"][number]
+            if (s["source_issue_id"] != selection["id"]
+                    or not valid_time(s["revision"])
+                    or s["url"] != "https://linear.app/%s/issue/%s" % (
+                        history["selection"]["workspace"], selection["id"])):
+                raise ValueError("Detailed historical source differs from selected issue")
+            validate_context(s["history_context"], selection, history["selection"]["workspace"])
+    return history_source_index(history)
 
 
 def replay_preview(story, policy, evidence, report, preview, raw_hashes):
