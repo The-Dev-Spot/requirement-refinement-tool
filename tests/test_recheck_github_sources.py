@@ -83,10 +83,21 @@ class GitHubFreshnessTests(unittest.TestCase):
         self.assertEqual(result["recheck_status"], "SOURCE_CHANGED")
         self.assertFalse(result["rechecked_sources"][1]["content_matches"])
 
-    def test_changed_issue_during_read_fails_closed(self):
+    def test_changed_issue_between_rechecks_reports_source_changed(self):
+        result = recheck(self.story, self.policy, self.evidence,
+                         FakeFreshGitHub(concurrent=True))
+        self.assertEqual(result["recheck_status"], "SOURCE_CHANGED")
+
+    def test_changed_issue_during_single_comment_read_fails_closed(self):
+        class MidReadChange(FakeFreshGitHub):
+            def issue(self, repo, number):
+                data = super().issue(repo, number)
+                if self.reads == 2:
+                    data["updated_at"] = "2026-11-04T12:00:00Z"
+                return data
+
         with self.assertRaisesRegex(ValueError, "changed during"):
-            recheck(self.story, self.policy, self.evidence,
-                    FakeFreshGitHub(concurrent=True))
+            recheck(self.story, self.policy, self.evidence, MidReadChange())
 
     def test_github_source_is_bound_to_allowlisted_original_story(self):
         changed = copy.deepcopy(self.evidence)
