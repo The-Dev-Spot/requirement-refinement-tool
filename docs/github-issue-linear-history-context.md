@@ -13,9 +13,11 @@ development/review targets and cannot trigger Forge.
   container, grant permissions, search arbitrary Linear projects, execute
   models, automatically resolve questions or change the Inbox. Deployment
   and project-specific selection remain **future milestones**.
-- The historical source reader reuses the fixed Linear GraphQL **read**
+- The v1 historical source reader reuses the fixed Linear GraphQL **read**
   query and private credential-file protections from the older archive
-  collector. It reads only exact IDs from the owner-scoped plan.
+  collector. The optional [v2 detailed reader](linear-history-status-comments.md)
+  adds scoped metadata preflight, workflow status and bounded comments.
+  Both read only exact IDs from the owner-scoped plan.
   Current issue intake remains a canonical owner/repo#number
   GitHub ID, checked against the current story and policy repository
   allowlist.
@@ -88,10 +90,9 @@ implemented in this initial history-reader PR.
 
 ## Limitations
 
-The existing Linear read query retrieves identifier, title,
-description and updatedAt. It does **not** yet retrieve full comments,
-status transitions or authenticated project membership. Therefore the
-packet explicitly marks project mapping and policy authority unverified.
-We should extend and verify this query **before** allowing automated
-semantic answers based on earlier decisions. The separate reader may
-help find evidence, not certify the truth or authority of that evidence.
+The legacy v1 query retrieves identifier, title, description and updatedAt,
+and retains unverified project mapping. The optional v2 reader checks actual
+workspace/team/project IDs and includes current workflow status and bounded
+comment excerpts. It does not fetch a status-transition audit log or certify
+project policy, owner authority, deployment or semantic answers. All historical
+packets remain SOURCE_UNVERIFIED; live integration has not been exercised.

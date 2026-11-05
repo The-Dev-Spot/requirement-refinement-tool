@@ -67,6 +67,10 @@ jobs:
         run: python -m unittest discover -s tests -p 'test_collect_context.py' -v
       - name: Test scoped Linear history-only context reader (mocked, no token)
         run: python -m unittest discover -s tests -p 'test_linear_history_context.py' -v
+      - name: Test scoped historical Linear status and comment evidence (mocked, no token)
+        run: python -m unittest discover -s tests -p 'test_linear_history_details.py' -v
+      - name: Compile historical Linear details reader
+        run: python -m py_compile scripts/linear_history_details.py
       - name: Test GitHub-only issue and repository evidence (mocked, no tokens)
         run: python -m unittest discover -s tests -p 'test_github_context.py' -v
       - name: Test offline GitHub evidence to question triage preview (no model)

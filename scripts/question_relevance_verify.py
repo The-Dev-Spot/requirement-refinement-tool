@@ -25,6 +25,7 @@ from quality_review import (
 )
 from question_relevance_gate import prepare_gate
 from question_relevance_research import build_prompt, MAX_TOPICS
+from linear_history_details import history_source_index, prompt_source
 
 MAX_PROMPT_BYTES = 120_000
 MAX_OUTPUT_BYTES = 220_000
@@ -34,7 +35,7 @@ OUTCOMES = ("CONCUR", "DISPUTE", "INSUFFICIENT_EVIDENCE")
 def _source_index(evidence, history):
     items = {x["id"]: x for x in evidence["sources"]}
     if history is not None:
-        items.update({x["id"]: x for x in history["historical_sources"]})
+        items.update(history_source_index(history))
     return items
 
 
@@ -197,11 +198,8 @@ def build_challenge_prompt(preview, evidence, research, history=None):
                 "id", "url", "revision", "source_kind", "authority_claim", "excerpt")}
             for s in evidence["sources"]
         ],
-        "unverified_linear_history": [
-            {key: s[key] for key in (
-                "id", "url", "revision", "authority", "project_mapping", "excerpt")}
-            for s in history["historical_sources"]
-        ] if history is not None else [],
+        "unverified_linear_history": [prompt_source(s) for s in history["historical_sources"]]
+        if history is not None else [],
         "questions": [
             {
                 "topic_id": tid, "original_question": topics[tid]["question"],
@@ -215,6 +213,11 @@ def build_challenge_prompt(preview, evidence, research, history=None):
             for tid in ids
         ],
     }
+    if history and history["schema_version"] == 2:
+        context["linear_history_sha256"] = digest(canonical(history).encode())
+        context["historical_context_rules"] = (
+            "Quote historical comments with their citation_id. Status and author IDs "
+            "do not prove deployment or owner authority. Account for truncated excerpts.")
     prompt = INSTRUCTIONS + "\n\nCHALLENGE_PACKET_JSON:\n" + canonical(context)
     if len(prompt.encode()) > MAX_PROMPT_BYTES:
         raise ValueError("Independent challenge input exceeds bounded size")
